@@ -208,15 +208,17 @@ Aperture solves this by letting users **record one walkthrough** on a local iOS 
 - [ ] Regeneration only overwrites if `--force` flag is used
 
 #### US-019: Export for App Store Sizes
-**Description:** As a developer, I want exported screenshots in all required App Store Connect dimensions.
+**Description:** As a developer, I want exported screenshots in required App Store Connect dimensions for iPhone and iPad.
 **Acceptance Criteria:**
-- [ ] Exports iPhone 6.7" screenshots at 1290×2796 (iPhone 14 Pro Max / 15 Plus / 16 Plus)
-- [ ] Exports iPhone 6.5" screenshots at 1242×2688 (iPhone 11 Pro Max / XS Max)
-- [ ] Exports iPhone 5.5" screenshots at 1242×2208 (iPhone 8 Plus / legacy)
-- [ ] Exports iPad Pro 12.9" (3rd gen+) at 2048×2732 (optional, configurable)
-- [ ] Exports iPad Pro 12.9" (2nd gen) at 2048×2732 (optional, configurable)
-- [ ] Exports iPad 10.5" at 1668×2224 (optional, configurable)
-- [ ] Output directory structure: `export/<locale>/<device-type>/screenshot-<n>.png`
+- [ ] Exports iPhone 6.5" screenshots at 1242×2688 (captures from iPhone Simulator)
+- [ ] Exports iPad 13" screenshots at 2048×2732 (captures from iPad Simulator)
+- [ ] Pipeline runs on **two Simulators**: iPhone (e.g., iPhone 14 Pro Max) and iPad (e.g., iPad Pro 13")
+- [ ] Recording is first replayed on the iPhone Simulator
+- [ ] Same recording is then attempted on the iPad Simulator — if UI differs significantly and playback fails, user is prompted to record a separate iPad walkthrough
+- [ ] Separate iPad recording is stored alongside iPhone recording in the same project (`recordings/<name>-iphone.json`, `recordings/<name>-ipad.json`)
+- [ ] `aperture.config.json` supports per-device Simulator UDID: `{ "simulators": { "iphone": "<udid>", "ipad": "<udid>" } }`
+- [ ] `aperture init` wizard prompts for both iPhone and iPad Simulators
+- [ ] Output directory structure: `export/<locale>/iphone/screenshot-<n>.png`, `export/<locale>/ipad/screenshot-<n>.png`
 - [ ] All exports pass App Store Connect upload validation (PNG, RGB, no alpha, ≤ 8MB)
 
 #### US-020: Web Recorder with Live Simulator Preview
@@ -279,8 +281,8 @@ Aperture solves this by letting users **record one walkthrough** on a local iOS 
 | FR-13 | System SHALL composite screenshots with templates using Sharp: background + device frame + screenshot + text overlay |
 | FR-14 | System SHALL ship 5 built-in template styles: minimal, modern, gradient, dark, playful |
 | FR-15 | System SHALL generate localized marketing copy via GPT-4o-mini with caching and manual edit support |
-| FR-16 | System SHALL export screenshots in App Store required dimensions: iPhone 6.7" (1290×2796), iPhone 6.5" (1242×2688), iPhone 5.5" (1242×2208), with optional iPad sizes (2048×2732, 1668×2224) |
-| FR-17 | System SHALL organize exports as `export/<locale>/<device-type>/screenshot-<n>.png` |
+| FR-16 | System SHALL run the pipeline on two Simulators (iPhone + iPad) and export: iPhone 6.5" at 1242×2688, iPad 13" at 2048×2732. If iPhone recording fails on iPad Simulator, system SHALL prompt user to record a separate iPad walkthrough |
+| FR-17 | System SHALL organize exports as `export/<locale>/iphone/screenshot-<n>.png` and `export/<locale>/ipad/screenshot-<n>.png` |
 
 ### Web UI
 
