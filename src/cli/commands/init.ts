@@ -118,8 +118,17 @@ async function createDefaultConfig(appPath?: string): Promise<ApertureConfigSche
     throw new Error(`App bundle not found: ${appPath}`);
   }
 
-  // Get bundle ID
-  const bundleId = await getBundleId(appPath);
+  // Get bundle ID (non-interactive mode - must succeed or fail)
+  let bundleId: string;
+  try {
+    bundleId = await deviceManager.getBundleId(appPath);
+  } catch (err) {
+    throw new Error(
+      `Failed to auto-detect bundle ID from ${appPath}: ${(err as Error).message}\n\n` +
+        'In non-interactive mode, automatic bundle ID detection must succeed.\n' +
+        'Please verify your app bundle is valid, or run without --yes flag to enter bundle ID manually.'
+    );
+  }
 
   // Get first booted device or throw
   const bootedDevices = await deviceManager.getBootedDevices();
@@ -372,6 +381,7 @@ async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
 
 /**
  * Get bundle ID from app path (.app or .ipa)
+ * If auto-detection fails, prompts user to enter it manually
  */
 async function getBundleId(appPath: string): Promise<string> {
   try {
@@ -379,9 +389,32 @@ async function getBundleId(appPath: string): Promise<string> {
     const bundleId = await deviceManager.getBundleId(appPath);
     return bundleId;
   } catch (err) {
-    // If extraction fails, fall back to placeholder
-    warning(`Failed to extract bundle ID from ${appPath}: ${(err as Error).message}`);
-    return 'com.example.app';
+    // If extraction fails, prompt user to enter bundle ID manually
+    warning(`Failed to auto-detect bundle ID: ${(err as Error).message}`);
+    console.log();
+
+    const answer = await inquirer.prompt<{ bundleId: string }>([
+      {
+        type: 'input',
+        name: 'bundleId',
+        message: 'Enter the bundle ID manually (e.g., com.example.app):',
+        validate: (input: string) => {
+          if (!input || input.trim().length === 0) {
+            return 'Bundle ID cannot be empty';
+          }
+          // Basic validation: should follow reverse domain notation
+          if (!/^[a-zA-Z0-9.-]+$/.test(input)) {
+            return 'Bundle ID should only contain letters, numbers, dots, and hyphens';
+          }
+          if (input.split('.').length < 2) {
+            return 'Bundle ID should follow reverse domain notation (e.g., com.example.app)';
+          }
+          return true;
+        },
+      },
+    ]);
+
+    return answer.bundleId.trim();
   }
 }
 
