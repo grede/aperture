@@ -46,11 +46,13 @@ The core innovation is replacing brittle record-and-replay automation with an LL
 - [ ] Parser validates schema and reports clear errors with line numbers
 - [ ] Variables `{{var_name}}` are recognized and left unresolved until execution
 
-#### US-1.02: MCP Server Integration
+#### US-1.02: MCP Server Integration (mobile-mcp)
 
 > As a developer, I want Aperture to control the iOS Simulator programmatically so the AI agent can interact with my app.
 
-- [ ] MCPClient connects to an MCP server (configurable endpoint)
+- [ ] MCPClient integrates with [`mobile-next/mobile-mcp`](https://github.com/mobile-next/mobile-mcp) as the MCP server
+- [ ] Primary interaction mode: accessibility snapshots (no computer vision model needed)
+- [ ] Fallback mode: screenshot-based coordinate taps when accessibility labels are unavailable
 - [ ] Supports `get_accessibility_tree()` → returns full UI hierarchy as structured data
 - [ ] Supports `tap(element_id)` and `tap(x, y)` for coordinate-based taps
 - [ ] Supports `type(text)` to input text into the focused field
@@ -733,7 +735,7 @@ llm:
   escalateAfterAttempts: 5
 
 mcp:
-  endpoint: stdio://ios-simulator-mcp
+  endpoint: stdio://mobile-mcp
 ```
 
 #### `aperture-flow.yaml`
@@ -898,15 +900,15 @@ search_query: "Nachrichten suchen"
 
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
-| OQ-1 | Which MCP server to use? Build custom or use existing `ios-simulator-mcp`? | M1 architecture | Open |
+| OQ-1 | ~~Which MCP server to use?~~ **RESOLVED:** Use [`mobile-next/mobile-mcp`](https://github.com/mobile-next/mobile-mcp). Supports iOS, Android, Simulators, emulators, and real devices. Uses accessibility snapshots (no computer vision model needed) with screenshot-based fallback. Future-proofs for Android and real device support. | M1 architecture | ✅ Resolved |
 | OQ-2 | How reliable is the accessibility tree for complex apps (e.g., games, custom renderers)? | Navigation success rate | Needs testing |
-| OQ-3 | Should we support screenshot-based vision (send actual screenshot image to LLM) as fallback when accessibility tree is insufficient? | Cost vs. reliability tradeoff | Open |
+| OQ-3 | ~~Screenshot-based vision as fallback?~~ **RESOLVED:** Yes, use as fallback. `mobile-mcp` supports both accessibility snapshots and screenshot-based coordinate taps. Primary: accessibility tree. Fallback: screenshot analysis when a11y labels are unavailable. | Cost vs. reliability tradeoff | ✅ Resolved |
 | OQ-4 | What's the optimal system prompt for the navigator LLM? Needs iteration. | Core quality | Open — will evolve during M1 |
-| OQ-5 | How to handle apps that require authentication/login? Pre-configure credentials in flow? | Flow design | Open |
+| OQ-5 | ~~How to handle app auth/login?~~ **RESOLVED:** Pre-configure credentials in flow YAML. Support a `credentials` section in `aperture.config.json` and `{{variable}}` substitution in flow steps. | Flow design | ✅ Resolved |
 | OQ-6 | Should we support `.ipa` files or only `.app` bundles? `.ipa` requires extraction. | Developer UX | Leaning `.app` only for M1 |
-| OQ-7 | How to handle device frame images? License-free frames or generate them? | Template engine | Open |
+| OQ-7 | ~~Device frame images?~~ **RESOLVED:** Use license-free frames. Source open-source/CC0 device frame assets (e.g., Facebook Design resources, or generate minimal SVG frames). | Template engine | ✅ Resolved |
 | OQ-8 | Should M3 support multiple Mac Minis in a cluster, or single-machine only? | Scalability | Single-machine for M3, cluster later |
 | OQ-9 | What's the fallback if GPT-4o-mini can't navigate a step even after escalation to GPT-4o? | UX | Log + skip for now |
-| OQ-10 | Should `aperture run` support a `--dry-run` mode that shows planned actions without executing? | Developer UX | Nice to have for M1 |
+| OQ-10 | ~~Dry-run mode?~~ **RESOLVED:** Yes, implement `--dry-run` in M1. Shows planned actions per step without executing. Useful for flow validation and cost estimation. | Developer UX | ✅ Resolved |
 | OQ-11 | How to handle Simulator state between locales? Full erase vs. app-only reset? | Speed vs. reliability | Leaning app-only reset |
 | OQ-12 | Pricing model for M3 web service? Per-job, subscription, or self-hosted only? | Business | Deferred |
