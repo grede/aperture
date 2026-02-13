@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "tsx watch src/cli/index.ts",
     "build": "tsc",
+    "postbuild": "chmod +x dist/cli/index.js",
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "lint": "eslint src --ext .ts",
@@ -18,7 +19,9 @@
     "test": "vitest",
     "test:unit": "vitest run --dir tests/unit",
     "test:integration": "vitest run --dir tests/integration",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "link": "npm run build && npm link",
+    "unlink": "npm unlink -g aperture"
   },
   "keywords": [
     "ios",
