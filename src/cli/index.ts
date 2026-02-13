@@ -12,6 +12,7 @@ import { runCommand } from './commands/run.js';
 import { exportCommand } from './commands/export.js';
 import { translationsCommand } from './commands/translations.js';
 import { importCommand } from './commands/import.js';
+import { webCommand } from './commands/web.js';
 
 const program = new Command();
 
@@ -103,6 +104,13 @@ program
   .option('--name <name>', 'Import name')
   .option('--output-dir <dir>', 'Output directory for imported screenshots')
   .action(importCommand);
+
+// Web UI command (US-020, US-021)
+program
+  .command('web')
+  .description('Start web UI for recording and preview (US-020, US-021)')
+  .option('--port <port>', 'Server port (default: 3000)', '3000')
+  .action(webCommand);
 
 // Parse arguments
 program.parse();
