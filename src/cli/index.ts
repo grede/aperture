@@ -8,6 +8,7 @@ import { playCommand } from './commands/play.js';
 import { serverCommand } from './commands/server.js';
 import { parameterizeCommand } from './commands/parameterize.js';
 import { localesCommand } from './commands/locales.js';
+import { runCommand } from './commands/run.js';
 
 const program = new Command();
 
@@ -66,14 +67,16 @@ program
 // Locales command
 program.addCommand(localesCommand);
 
-// Run command (placeholder)
+// Run command (US-014)
 program
   .command('run <template>')
-  .description('Run template across all locales')
-  .option('--locales <locales>', 'Comma-separated locale list or "all"')
-  .action((template) => {
-    console.log(`Running template: ${template} (coming soon - US-014)`);
-  });
+  .description('Run template across all locales (US-014)')
+  .option('--locales <locales>', 'Comma-separated locale list or "all" (default: all configured)')
+  .option('--device <udid>', 'Simulator UDID')
+  .option('--output-dir <dir>', 'Output directory for screenshots')
+  .option('--no-auto-appium', 'Disable automatic Appium server management')
+  .option('--appium-port <port>', 'Appium server port (default: 8100)')
+  .action(runCommand);
 
 // Export command (placeholder)
 program
