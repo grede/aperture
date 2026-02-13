@@ -1,0 +1,45 @@
+{
+  "name": "playful",
+  "displayName": "Playful",
+  "background": {
+    "type": "gradient",
+    "gradientColors": ["#ffecd2", "#fcb69f"],
+    "gradientAngle": 120
+  },
+  "deviceFrame": {
+    "fileName": "iphone-frame.svg",
+    "displayArea": {
+      "top": 12,
+      "left": 12,
+      "width": 76,
+      "height": 68
+    }
+  },
+  "textOverlays": [
+    {
+      "content": "{{title}}",
+      "top": 6,
+      "fontFamily": "SF Pro Display",
+      "fontSize": 54,
+      "color": "#FF6B6B",
+      "align": "center",
+      "maxWidth": 85,
+      "bold": true
+    },
+    {
+      "content": "{{subtitle}}",
+      "top": 86,
+      "fontFamily": "SF Pro Display",
+      "fontSize": 34,
+      "color": "#4A4A4A",
+      "align": "center",
+      "maxWidth": 80
+    }
+  ],
+  "safeArea": {
+    "top": 6,
+    "bottom": 12,
+    "left": 12,
+    "right": 12
+  }
+}

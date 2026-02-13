@@ -9,6 +9,7 @@ import { serverCommand } from './commands/server.js';
 import { parameterizeCommand } from './commands/parameterize.js';
 import { localesCommand } from './commands/locales.js';
 import { runCommand } from './commands/run.js';
+import { exportCommand } from './commands/export.js';
 
 const program = new Command();
 
@@ -80,14 +81,15 @@ program
   .option('--no-cache', 'Force fresh selector resolution, ignore cache (US-016)')
   .action(runCommand);
 
-// Export command (placeholder)
+// Export command (US-017)
 program
   .command('export <template>')
-  .description('Export screenshots with templates')
+  .description('Export screenshots with templates (US-017)')
   .option('--style <style>', 'Template style (minimal|modern|gradient|dark|playful)')
-  .action((template) => {
-    console.log(`Exporting template: ${template} (coming soon - US-017)`);
-  });
+  .option('--locales <locales>', 'Comma-separated locale list or "all" (default: all configured)')
+  .option('--devices <devices>', 'Comma-separated device list (iphone,ipad) or "all" (default: all)')
+  .option('--output-dir <dir>', 'Output directory for exports')
+  .action(exportCommand);
 
 // Parse arguments
 program.parse();

@@ -38,14 +38,14 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# Aperture-specific directories
-recordings/
-templates/
-locales/
-translations/
-output/
-export/
-cache/
+# Aperture-specific directories (user-generated data, not source code)
+/recordings/
+/templates/
+/locales/
+/translations/
+/output/
+/export/
+/cache/
 
 # Config (keep example, ignore user configs)
 aperture.config.json

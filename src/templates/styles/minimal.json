@@ -1,0 +1,35 @@
+{
+  "name": "minimal",
+  "displayName": "Minimal",
+  "background": {
+    "type": "solid",
+    "color": "#FFFFFF"
+  },
+  "deviceFrame": {
+    "fileName": "iphone-frame.svg",
+    "displayArea": {
+      "top": 5,
+      "left": 5,
+      "width": 90,
+      "height": 90
+    }
+  },
+  "textOverlays": [
+    {
+      "content": "{{title}}",
+      "top": 85,
+      "fontFamily": "SF Pro Display",
+      "fontSize": 48,
+      "color": "#000000",
+      "align": "center",
+      "maxWidth": 90,
+      "bold": true
+    }
+  ],
+  "safeArea": {
+    "top": 5,
+    "bottom": 5,
+    "left": 5,
+    "right": 5
+  }
+}
