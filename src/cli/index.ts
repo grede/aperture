@@ -73,12 +73,12 @@ program.addCommand(localesCommand);
 // Translations command (US-018)
 program.addCommand(translationsCommand);
 
-// Run command (US-014)
+// Run command (US-014, US-019)
 program
   .command('run <template>')
-  .description('Run template across all locales (US-014)')
+  .description('Run template across all locales (US-014, US-019)')
   .option('--locales <locales>', 'Comma-separated locale list or "all" (default: all configured)')
-  .option('--device <udid>', 'Simulator UDID')
+  .option('--device <udid>', 'Simulator UDID (use iPhone for 6.5", iPad for 13")')
   .option('--output-dir <dir>', 'Output directory for screenshots')
   .option('--no-auto-appium', 'Disable automatic Appium server management')
   .option('--appium-port <port>', 'Appium server port (default: 8100)')
