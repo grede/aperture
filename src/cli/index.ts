@@ -6,6 +6,7 @@ import { devicesCommand } from './commands/devices.js';
 import { recordCommand } from './commands/record.js';
 import { playCommand } from './commands/play.js';
 import { serverCommand } from './commands/server.js';
+import { parameterizeCommand } from './commands/parameterize.js';
 
 const program = new Command();
 
@@ -53,6 +54,13 @@ program
   .option('--no-auto-appium', 'Disable automatic Appium server management')
   .option('--appium-port <port>', 'Appium server port (default: 8100)')
   .action(playCommand);
+
+// Parameterize command
+program
+  .command('parameterize <recording>')
+  .description('Analyze recording and create parameterized template (US-009)')
+  .option('--force', 'Force re-analysis even if template exists')
+  .action(parameterizeCommand);
 
 // Run command (placeholder)
 program
