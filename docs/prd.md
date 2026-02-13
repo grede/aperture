@@ -1,0 +1,433 @@
+# Aperture — MVP Product Requirements Document
+
+**Version:** 1.0
+**Date:** 2026-02-13
+**Status:** Draft
+
+---
+
+## 1. Introduction / Overview
+
+Aperture is an AI-powered tool that automates the creation of localized app store screenshots. Today, indie developers and small teams manually capture screenshots for every language × every screen × every device size — a combinatorial nightmare that scales as O(languages × screens × sizes).
+
+Aperture solves this by letting users **record one walkthrough** on a local Android emulator, then **automatically replaying** it for every locale. The AI agent creates test data, navigates screens, captures screenshots, applies design templates with localized copy, and exports store-ready assets.
+
+**Key differentiator:** No code required. Unlike Fastlane snapshot (requires XCUITest), Aperture uses an accessibility-tree-first approach with AI fallback — users just click through their app once.
+
+**MVP scope:** Android only, local emulator, CLI for execution + web UI for recording.
+
+---
+
+## 2. Goals
+
+| # | Goal | Measure |
+|---|------|---------|
+| G1 | Reduce screenshot creation time by 10× vs manual | User completes 5-language export in < 15 min (vs ~2.5h manual) |
+| G2 | Achieve ≥ 95% playback success rate on recorded flows | Measured across 50 test runs on 10 different apps |
+| G3 | Ship M1 within 4 weeks, M2 within 8 weeks, M3 within 12 weeks | Calendar milestones |
+| G4 | Support 30+ languages for localization at launch | Translation pipeline covers all Play Store languages |
+| G5 | Deliver store-ready assets requiring zero manual post-processing | Exported PNGs pass Google Play asset validation |
+
+---
+
+## 3. User Stories
+
+### Milestone 1 — Core Recording + Playback (CLI, Android)
+
+#### US-001: Connect to Local Android Emulator
+**Description:** As a developer, I want the CLI to detect and connect to a running local Android emulator so I can start recording.
+**Acceptance Criteria:**
+- [ ] CLI command `aperture devices` lists all running Android emulators/devices via ADB
+- [ ] CLI command `aperture connect <device-id>` establishes an Appium/UIAutomator2 session
+- [ ] If no emulator is running, CLI prints actionable error with setup instructions
+- [ ] Connection timeout is configurable (default 30s)
+
+#### US-002: Install Target APK on Emulator
+**Description:** As a developer, I want to specify my app's APK so the tool installs it on the emulator before recording.
+**Acceptance Criteria:**
+- [ ] CLI command `aperture init --apk ./myapp.apk` installs the APK via ADB
+- [ ] If app is already installed, user is prompted to reinstall or keep
+- [ ] APK package name is auto-detected and stored in project config (`aperture.config.json`)
+- [ ] Invalid/missing APK path returns clear error
+
+#### US-003: Record a Manual Walkthrough
+**Description:** As a developer, I want to manually walk through my app while the tool records each step, so I can replay it later.
+**Acceptance Criteria:**
+- [ ] CLI command `aperture record` starts a recording session
+- [ ] Each user action (tap, type, scroll, back) is captured with:
+  - Action type and coordinates/element identifier
+  - Accessibility tree snapshot (full XML dump from UIAutomator2)
+  - Timestamp relative to session start
+- [ ] Recording is saved as a JSON file (`recordings/<name>.json`)
+- [ ] User can name the recording session
+
+#### US-004: Mark Screenshot Points During Recording
+**Description:** As a developer, I want to mark specific moments during recording as "take screenshot here" so the tool knows which screens to capture.
+**Acceptance Criteria:**
+- [ ] Keyboard shortcut or CLI command during recording marks current screen as screenshot point
+- [ ] Each screenshot point stores: name/label, accessibility tree, screen state hash
+- [ ] At least 1 screenshot point required to save a valid recording
+- [ ] Maximum 10 screenshot points per recording (MVP limit)
+
+#### US-005: Replay a Recording Deterministically
+**Description:** As a developer, I want to replay a saved recording on the same emulator/locale so the tool reproduces my exact walkthrough.
+**Acceptance Criteria:**
+- [ ] CLI command `aperture play <recording-name>` replays all steps sequentially
+- [ ] Elements are located primarily by: resource-id > content-desc > text > xpath (priority order)
+- [ ] Each step has a configurable timeout (default 10s) for element to appear
+- [ ] If an element is not found, playback stops with error indicating which step failed
+- [ ] Console output shows real-time progress: `Step 3/12: tap "Login button" ✓`
+
+#### US-006: Capture Screenshots at Marked Points
+**Description:** As a developer, I want the tool to capture PNG screenshots at each marked point during playback.
+**Acceptance Criteria:**
+- [ ] Screenshots are saved as PNG files in `output/<recording>/<locale>/screenshot-<n>.png`
+- [ ] Screenshot resolution matches emulator display (no scaling)
+- [ ] Status bar is optionally hidden (configurable, default: hidden)
+- [ ] Each screenshot filename includes the user-defined label from recording
+
+#### US-007: Reset App State Between Runs
+**Description:** As a developer, I want the tool to clear app data before each playback run so recordings start from a clean state.
+**Acceptance Criteria:**
+- [ ] Before playback, app data is cleared via `adb shell pm clear <package>`
+- [ ] App is force-stopped and relaunched
+- [ ] User can opt out of data clearing via `--no-reset` flag
+- [ ] Custom setup commands can be defined in config (e.g., pre-seed database)
+
+#### US-008: Project Configuration File
+**Description:** As a developer, I want a project config file that stores all settings so I don't re-enter them every run.
+**Acceptance Criteria:**
+- [ ] `aperture init` creates `aperture.config.json` in current directory
+- [ ] Config stores: package name, APK path, default device, locales list, template choice, output directory
+- [ ] All CLI flags can be overridden via config file
+- [ ] Config file is validated on load with clear error messages for invalid fields
+
+### Milestone 2 — AI Parameterization + Localization
+
+#### US-009: AI-Parameterize a Recording
+**Description:** As a developer, I want the AI to analyze my recording and identify text inputs that should change per locale (e.g., test data names, locale-specific strings).
+**Acceptance Criteria:**
+- [ ] CLI command `aperture parameterize <recording>` analyzes all steps
+- [ ] AI identifies text input actions and suggests parameters: `{{user_name}}`, `{{group_name}}`, etc.
+- [ ] User reviews and confirms/edits each suggestion interactively in CLI
+- [ ] Parameterized recording is saved as a template (`templates/<name>.json`)
+- [ ] Original recording is preserved unchanged
+
+#### US-010: Define Locale-Specific Test Data
+**Description:** As a developer, I want to provide locale-specific values for parameters (e.g., German names for `de` locale) so screenshots look authentic.
+**Acceptance Criteria:**
+- [ ] File `locales/<locale>.json` stores parameter values per locale
+- [ ] CLI command `aperture locales generate` uses GPT-4o-mini to generate culturally appropriate test data for all configured locales
+- [ ] Generated data is saved as editable JSON — user can manually override any value
+- [ ] LLM-generated values are cached; regeneration only on explicit request
+
+#### US-011: Change Emulator Locale Programmatically
+**Description:** As a developer, I want the tool to switch the Android emulator's locale automatically so my app renders in the target language.
+**Acceptance Criteria:**
+- [ ] Tool changes device locale via ADB (`setprop persist.sys.locale`) + reboot
+- [ ] After locale change, tool waits for device boot completion before proceeding
+- [ ] App is relaunched after locale switch
+- [ ] If locale is not supported by the device, warning is logged and run is skipped
+
+#### US-012: AI Fallback for Element Location
+**Description:** As a developer, I want the AI to find UI elements when deterministic selectors fail, so playback doesn't break on minor UI changes.
+**Acceptance Criteria:**
+- [ ] When primary selector (resource-id/content-desc/text) fails, system captures current accessibility tree
+- [ ] Accessibility tree is sent to GPT-4o-mini with the original step context
+- [ ] AI returns a candidate element identifier; system attempts to interact with it
+- [ ] If AI fallback also fails, step is marked as failed with full diagnostic info
+- [ ] AI fallback usage is logged and flagged in run report
+
+#### US-013: Deterministic Verification After Each Step
+**Description:** As a developer, I want each playback step verified deterministically (not via LLM) to ensure correctness.
+**Acceptance Criteria:**
+- [ ] After each action, system captures new accessibility tree
+- [ ] Verification checks: expected screen/activity is active, expected elements are present
+- [ ] Verification uses string matching and tree comparison, never LLM
+- [ ] Failed verification stops playback with detailed mismatch report
+- [ ] Checkpoint assertions can be defined manually in template JSON
+
+#### US-014: Batch Execution Across All Locales
+**Description:** As a developer, I want to run one command that replays my recording across all configured locales.
+**Acceptance Criteria:**
+- [ ] CLI command `aperture run <template> --locales all` iterates through every configured locale
+- [ ] Each locale run: switches locale → resets app → replays template → captures screenshots
+- [ ] Progress displayed: `[3/15] Running locale: de_DE... ✓ (4 screenshots captured)`
+- [ ] Failed locales are logged but don't block remaining locales
+- [ ] Summary report at end: success/fail count per locale
+
+#### US-015: Execution Safety Guardrails
+**Description:** As a developer, I want configurable guardrails (max steps, timeouts, forbidden actions) to prevent runaway automation.
+**Acceptance Criteria:**
+- [ ] Config supports `maxSteps` (default: 50), `stepTimeout` (default: 10s), `runTimeout` (default: 5min)
+- [ ] Config supports `forbiddenActions` list (e.g., "uninstall", "delete account")
+- [ ] If any limit is hit, run is aborted with clear message
+- [ ] All guardrail values are configurable per-project in `aperture.config.json`
+
+#### US-016: Cache Successful Runs as Deterministic Scripts
+**Description:** As a developer, I want successful AI-assisted runs to be cached so future runs use the exact same resolved selectors without calling the LLM.
+**Acceptance Criteria:**
+- [ ] After a successful run, resolved element selectors are saved per locale in `cache/<template>/<locale>.json`
+- [ ] Subsequent runs use cached selectors first, falling back to AI only if cache misses
+- [ ] CLI flag `--no-cache` forces fresh resolution
+- [ ] Cache is invalidated when template is modified (detected via hash)
+
+### Milestone 3 — Templates + Export + Web UI
+
+#### US-017: Apply Device Frame Template to Screenshots
+**Description:** As a developer, I want to apply a design template (device frame, background, text) to my raw screenshots so they look professional.
+**Acceptance Criteria:**
+- [ ] CLI command `aperture export <template> --style modern` applies the chosen template
+- [ ] Template composites: background layer + device frame + screenshot + text overlay
+- [ ] 5 built-in styles available: `minimal`, `modern`, `gradient`, `dark`, `playful`
+- [ ] Text overlay uses localized copywriting from translations JSON
+- [ ] Output is PNG at store-required resolutions
+
+#### US-018: Generate Localized Copywriting for Templates
+**Description:** As a developer, I want AI-generated marketing copy for each screenshot in every language.
+**Acceptance Criteria:**
+- [ ] CLI command `aperture translations generate` creates copy for each screenshot point × locale
+- [ ] User provides base English copy per screenshot (e.g., "Chat with friends in real time")
+- [ ] GPT-4o-mini translates and adapts copy for each locale (not literal translation — marketing tone)
+- [ ] Translations saved in `translations/<locale>.json`, fully editable
+- [ ] Regeneration only overwrites if `--force` flag is used
+
+#### US-019: Export for Google Play Store Sizes
+**Description:** As a developer, I want exported screenshots in all required Google Play dimensions.
+**Acceptance Criteria:**
+- [ ] Exports phone screenshots at 1080×1920, 1242×2208, 1284×2778
+- [ ] Exports 7" tablet at 1200×1920 (optional, configurable)
+- [ ] Exports 10" tablet at 1600×2560 (optional, configurable)
+- [ ] Output directory structure: `export/<locale>/<device-type>/screenshot-<n>.png`
+- [ ] All exports pass Google Play Console upload validation (PNG, RGB, ≤ 8MB)
+
+#### US-020: Web Recorder with Live Emulator Preview
+**Description:** As a developer, I want a web UI that shows my emulator screen live and lets me record walkthroughs by clicking in the browser.
+**Acceptance Criteria:**
+- [ ] `aperture web` starts a local web server on `localhost:3000`
+- [ ] Web UI displays live emulator screen via scrcpy/mirroring (< 200ms latency)
+- [ ] Clicks/taps in browser are forwarded to emulator
+- [ ] Text input is supported via browser keyboard
+- [ ] "Mark Screenshot" button adds a screenshot point (equivalent to CLI hotkey)
+- [ ] Recording can be saved/named from the web UI
+- [ ] Web UI shows accessibility tree panel alongside emulator view
+
+#### US-021: Web UI Template Preview
+**Description:** As a developer, I want to preview how my screenshots will look with templates applied before exporting.
+**Acceptance Criteria:**
+- [ ] Web UI shows template preview gallery after a run completes
+- [ ] User can switch between templates and locales in preview
+- [ ] Preview renders at actual export resolution
+- [ ] "Export All" button triggers full batch export
+
+#### US-022: Import Existing Screenshots (No Recording)
+**Description:** As a developer, I want to import existing screenshots and just apply templates + localization, even without recording.
+**Acceptance Criteria:**
+- [ ] CLI command `aperture import ./screenshots/` imports PNG files as screenshot points
+- [ ] User maps each screenshot to a label and provides base English copy
+- [ ] Template application and localized export work identically to recorded screenshots
+- [ ] This mode skips all emulator/playback functionality
+
+---
+
+## 4. Functional Requirements
+
+### Recording & Playback
+
+| ID | Requirement |
+|----|-------------|
+| FR-1 | System SHALL connect to Android emulators via ADB and establish UIAutomator2 sessions through Appium |
+| FR-2 | System SHALL record user actions as a structured JSON sequence including: action type, element selector (resource-id, content-desc, text, bounds), accessibility tree XML snapshot, and relative timestamp |
+| FR-3 | System SHALL replay recorded actions using a priority-ordered selector strategy: resource-id → content-desc → text → XPath |
+| FR-4 | System SHALL capture full-resolution PNG screenshots at user-marked points during playback |
+| FR-5 | System SHALL clear app data and restart the target app before each playback run (unless `--no-reset`) |
+
+### AI & Localization
+
+| ID | Requirement |
+|----|-------------|
+| FR-6 | System SHALL analyze recordings and identify parameterizable text inputs using GPT-4o-mini |
+| FR-7 | System SHALL generate culturally appropriate test data for each configured locale using GPT-4o-mini |
+| FR-8 | System SHALL switch Android device locale via ADB and wait for device ready state before proceeding |
+| FR-9 | System SHALL use AI fallback (accessibility tree → GPT-4o-mini) when deterministic selectors fail to locate an element within the configured timeout |
+| FR-10 | System SHALL verify each step deterministically using accessibility tree comparison and string matching — never via LLM |
+| FR-11 | System SHALL enforce configurable guardrails: max_steps, step_timeout, run_timeout, forbidden_actions |
+| FR-12 | System SHALL cache resolved selectors from successful AI-assisted runs and reuse them in subsequent runs |
+
+### Templates & Export
+
+| ID | Requirement |
+|----|-------------|
+| FR-13 | System SHALL composite screenshots with templates using Sharp: background + device frame + screenshot + text overlay |
+| FR-14 | System SHALL ship 5 built-in template styles: minimal, modern, gradient, dark, playful |
+| FR-15 | System SHALL generate localized marketing copy via GPT-4o-mini with caching and manual edit support |
+| FR-16 | System SHALL export screenshots in Google Play required dimensions (phone: 1080×1920, 1242×2208, 1284×2778) |
+| FR-17 | System SHALL organize exports as `export/<locale>/<device-type>/screenshot-<n>.png` |
+
+### Web UI
+
+| ID | Requirement |
+|----|-------------|
+| FR-18 | System SHALL serve a web UI on localhost that displays live emulator screen with < 200ms latency |
+| FR-19 | System SHALL forward browser interactions (tap, type, scroll) to the connected emulator |
+| FR-20 | System SHALL display an accessibility tree inspector panel in the web UI |
+
+---
+
+## 5. Non-Goals (Out of Scope for MVP)
+
+- **iOS support** — deferred to v2; architecture should accommodate it but no implementation
+- **Cloud emulators** — MVP is local-only; cloud execution is a post-MVP feature
+- **CI/CD integration** — no GitHub Actions/pipeline support in MVP
+- **App Store (Apple) export sizes** — Android/Google Play only
+- **Custom template designer** — users choose from 5 presets; no drag-and-drop editor
+- **Team collaboration features** — single-user only
+- **Account system / authentication** — no user accounts in MVP
+- **Video recording** — screenshots only, no animated previews or video walkthroughs
+- **Physical device support** — emulator only for MVP
+- **Automatic app store upload** — export files only; no Play Console API integration
+
+---
+
+## 6. Design Considerations
+
+### CLI Design
+- Follow Unix conventions: composable commands, stdout for data, stderr for logs
+- Use `ora` spinners for long operations, `chalk` for colored output
+- Progress bars for batch operations (locale iteration)
+- All output parseable with `--json` flag for scripting
+
+### Web UI Design
+- Split-panel layout: emulator view (left), controls + accessibility tree (right)
+- Recording controls as a floating toolbar over emulator view
+- Template preview as a gallery grid with locale switcher
+- Minimal design — developer tool, not consumer app
+
+### Template Design
+- Templates defined as JSON schema: layers, positions, fonts, colors
+- Device frames as SVG assets for resolution independence
+- Text overlay supports: title, subtitle, with configurable font/size/color/position
+- Safe area constraints to prevent text overlapping device frame
+
+---
+
+## 7. Technical Considerations
+
+### Architecture
+```
+CLI (Commander.js)
+  ├── DeviceManager (ADB + Appium client)
+  ├── Recorder (action capture + a11y tree)
+  ├── Player (deterministic replay + AI fallback)
+  ├── Parameterizer (GPT-4o-mini analysis)
+  ├── LocaleManager (device locale switching)
+  ├── TemplateEngine (Sharp compositing)
+  ├── TranslationService (GPT-4o-mini + cache)
+  └── WebServer (Express + WebSocket for UI)
+```
+
+### Key Technical Decisions
+- **Appium over Maestro**: Better programmatic control, mature Node.js client, accessibility tree access via UIAutomator2. Maestro is simpler but less flexible for AI integration.
+- **Accessibility tree over screenshots for AI**: Structured XML data is cheaper, faster, and more reliable than vision models analyzing pixel data.
+- **Sharp over Canvas/Puppeteer for templates**: Native Node.js image processing, no browser dependency, fast batch processing.
+- **GPT-4o-mini as default, GPT-4o as fallback**: Cost optimization — mini handles 95%+ of cases at ~10× lower cost.
+
+### Performance Targets
+- Recording startup: < 5s from command to ready
+- Playback step execution: < 2s average per step
+- Locale switch: < 30s including device reboot
+- Template rendering: < 1s per screenshot
+- Full 5-language, 5-screenshot export: < 10 minutes
+
+### Data Model
+```typescript
+// Recording
+interface Recording {
+  id: string;
+  name: string;
+  packageName: string;
+  steps: Step[];
+  screenshotPoints: ScreenshotPoint[];
+  createdAt: string;
+}
+
+interface Step {
+  index: number;
+  action: 'tap' | 'type' | 'scroll' | 'back' | 'home';
+  selector: ElementSelector;
+  value?: string; // for type actions
+  accessibilityTree: string; // XML snapshot
+  timestamp: number;
+}
+
+interface ElementSelector {
+  resourceId?: string;
+  contentDesc?: string;
+  text?: string;
+  xpath?: string;
+  bounds?: [number, number, number, number];
+}
+
+interface ScreenshotPoint {
+  afterStep: number;
+  label: string;
+  accessibilityTreeHash: string;
+}
+
+// Parameterized Template
+interface Template extends Recording {
+  parameters: Parameter[];
+}
+
+interface Parameter {
+  name: string; // e.g., "user_name"
+  stepIndex: number;
+  originalValue: string;
+  description: string;
+}
+
+// Locale Data
+interface LocaleData {
+  locale: string;
+  parameters: Record<string, string>;
+  translations: Record<string, string>; // screenshot label → marketing copy
+}
+```
+
+### Dependencies
+- `appium` + `webdriverio` — emulator control
+- `sharp` — image compositing
+- `openai` — GPT API access
+- `commander` — CLI framework
+- `express` + `ws` — web server
+- `scrcpy` (system) — emulator screen mirroring for web UI
+
+---
+
+## 8. Success Metrics
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| Playback success rate | ≥ 95% | Automated test suite: 10 apps × 5 locales |
+| Time to first export | < 30 min | From `aperture init` to first localized screenshot set |
+| Time per additional locale | < 3 min | After initial recording is done |
+| AI fallback rate | < 10% of steps | Logged per run; high rates indicate selector quality issues |
+| LLM cost per full run | < $0.10 | For 5 locales × 5 screenshots including translations |
+| Template render time | < 1s per image | Benchmarked on M1 Mac / comparable hardware |
+| User satisfaction (beta) | ≥ 4/5 | Post-beta survey, n ≥ 20 |
+
+---
+
+## 9. Open Questions
+
+| # | Question | Impact | Owner |
+|---|----------|--------|-------|
+| OQ-1 | Appium vs Maestro — should we prototype both and benchmark? | M1 architecture | Engineering |
+| OQ-2 | How to handle apps that require authentication with third-party services (Google Sign-In, etc.)? | Recording completeness | Engineering |
+| OQ-3 | Should we support landscape screenshots for tablet/game apps in MVP? | FR-16 scope | Product |
+| OQ-4 | What's the minimum Android API level we support? (Affects UIAutomator2 capabilities) | Compatibility | Engineering |
+| OQ-5 | Should the web recorder support touch gestures beyond tap (pinch, multi-finger swipe)? | M3 scope | Product |
+| OQ-6 | How do we handle dynamic content (timestamps, relative dates, random avatars) in screenshot verification? | Verification reliability | Engineering |
+| OQ-7 | Should we support right-to-left (RTL) languages in M2 or defer? | Localization scope | Product |
+| OQ-8 | License model for device frame assets — create our own or use existing open-source frames? | Legal / Design | Design |
+| OQ-9 | Do we need analytics/telemetry in CLI for usage insights, and if so, how to handle privacy? | Growth | Product |
