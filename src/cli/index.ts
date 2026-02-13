@@ -10,6 +10,7 @@ import { parameterizeCommand } from './commands/parameterize.js';
 import { localesCommand } from './commands/locales.js';
 import { runCommand } from './commands/run.js';
 import { exportCommand } from './commands/export.js';
+import { translationsCommand } from './commands/translations.js';
 
 const program = new Command();
 
@@ -68,6 +69,9 @@ program
 
 // Locales command
 program.addCommand(localesCommand);
+
+// Translations command (US-018)
+program.addCommand(translationsCommand);
 
 // Run command (US-014)
 program
