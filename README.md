@@ -23,22 +23,65 @@ Aperture lets you **record one walkthrough** on a local iOS Simulator, then **au
 4. Export    →  Templated, store-ready PNGs in all required sizes
 ```
 
+## Prerequisites
+
+Before installing Aperture, ensure you have:
+
+- **macOS** (required for iOS Simulator)
+- **Xcode** 14.0+ with Command Line Tools installed
+  ```bash
+  xcode-select --install
+  ```
+- **Node.js** 18.0+ and npm
+  ```bash
+  node --version  # Should be >= 18.0.0
+  ```
+
+## Installation
+
+### Global Installation (CLI Usage)
+
+```bash
+# Install Aperture globally
+npm install -g aperture
+
+# Build WebDriverAgent (required first-time setup)
+npx appium driver run xcuitest build-wda
+
+# Verify installation and check system requirements
+aperture doctor
+```
+
+### Development Setup
+
+```bash
+# Clone and install dependencies
+git clone https://github.com/your-org/aperture.git
+cd aperture
+npm install
+
+# Build TypeScript
+npm run build
+
+# Build WebDriverAgent (REQUIRED - one-time setup)
+npx appium driver run xcuitest build-wda
+
+# Link for local development
+npm link
+
+# Verify setup (checks all requirements)
+aperture doctor
+```
+
+**⚠️ Important:** The WebDriverAgent build step is **required** for Aperture to control the iOS Simulator. This only needs to be done once after installation.
+
 ## Quick Start
 
 ```bash
-# Install globally
-npm install -g aperture
-
-# Or for development
-npm install
-npm run build
-npm link
-
 # Initialize project with interactive wizard
 aperture init
 
 # Record a walkthrough
-# Appium will be installed and started automatically!
 aperture record
 
 # Replay and capture screenshots
@@ -52,7 +95,7 @@ aperture run my-recording --locales all
 aperture export my-recording --style modern
 ```
 
-**Automatic Appium Management** — Aperture automatically installs, starts, and manages Appium server for you. No manual setup required! 🎉
+**Automatic Appium Management** — Aperture automatically installs, starts, and manages Appium server for you. After the one-time WebDriverAgent setup, no manual server management is needed! 🎉
 
 For manual control:
 ```bash
@@ -71,6 +114,71 @@ aperture server logs     # View logs
 - 📱 **Store-Ready Export** — App Store dimensions (6.7", 6.5", 5.5" + iPad), device frames, localized text overlays
 - 🖥️ **Web Recorder** — Browser-based recording with live Simulator preview
 - ⚡ **Cached Runs** — Successful AI resolutions are cached for instant reruns
+
+## Troubleshooting
+
+### "Failed to connect to WebDriverAgent" Error
+
+If you see errors about WebDriverAgent connection failures:
+
+```bash
+# Build WebDriverAgent (if not done during installation)
+npx appium driver run xcuitest build-wda
+
+# Verify Xcode Command Line Tools are installed
+xcode-select -p
+
+# If path is not set, install:
+xcode-select --install
+```
+
+### "No route found for /wd/hub/session" Error
+
+This indicates an Appium version mismatch. Ensure you're using Appium 2.x:
+
+```bash
+# Check installed version
+npx appium --version
+
+# Should show 2.x.x (not 3.x.x)
+# If wrong version, reinstall dependencies:
+rm -rf node_modules package-lock.json
+npm install
+npm run build
+```
+
+### WebDriverAgent Port Conflicts
+
+If you see port 8100 conflicts:
+
+```bash
+# Check what's using port 8100
+lsof -i :8100
+
+# Kill any conflicting processes
+kill <PID>
+
+# Restart Aperture
+aperture record
+```
+
+### Simulator Not Responding
+
+```bash
+# Reset the simulator
+xcrun simctl shutdown all
+xcrun simctl erase all
+
+# Reboot and try again
+aperture record
+```
+
+### View Detailed Logs
+
+```bash
+# Check Appium server logs for detailed error messages
+aperture server logs
+```
 
 ## Architecture
 

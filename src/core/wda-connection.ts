@@ -43,7 +43,7 @@ export class WDAConnection {
     const wdioOptions: RemoteOptions = {
       hostname: 'localhost',
       port: this.options.port,
-      path: '/wd/hub',
+      path: '/',
       capabilities: {
         platformName: 'iOS',
         'appium:automationName': 'XCUITest',
@@ -51,8 +51,7 @@ export class WDAConnection {
         'appium:bundleId': this.options.bundleId,
         'appium:noReset': true,
         'appium:fullReset': false,
-        'appium:usePrebuiltWDA': true,
-        'appium:derivedDataPath': '/tmp/wda',
+        'appium:wdaLocalPort': 8101,
       },
       logLevel: 'error',
       waitforTimeout: 10000,
@@ -76,8 +75,16 @@ export class WDAConnection {
       logger.info('WebDriverAgent connected successfully');
       return this.browser;
     } catch (error) {
+      const errorMessage = [
+        'Failed to connect to WebDriverAgent.',
+        '\nPossible solutions:',
+        '  1. Build WebDriverAgent: npx appium driver run xcuitest build-wda',
+        '  2. Check Appium server status: aperture server status',
+        '  3. View logs for details: aperture server logs',
+      ].join('\n');
+
       throw new DeviceError(
-        'Failed to connect to WebDriverAgent. Is Appium server running?',
+        errorMessage,
         'WDA_CONNECTION_FAILED',
         {
           udid: this.options.udid,

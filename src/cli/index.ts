@@ -13,6 +13,7 @@ import { exportCommand } from './commands/export.js';
 import { translationsCommand } from './commands/translations.js';
 import { importCommand } from './commands/import.js';
 import { webCommand } from './commands/web.js';
+import { createDoctorCommand } from './commands/doctor.js';
 
 const program = new Command();
 
@@ -36,6 +37,9 @@ program
   .option('--all', 'Show all devices, not just booted ones')
   .option('--json', 'Output as JSON')
   .action(devicesCommand);
+
+// Doctor command (setup verification)
+program.addCommand(createDoctorCommand());
 
 // Server command
 program.addCommand(serverCommand);

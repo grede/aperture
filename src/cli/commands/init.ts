@@ -168,10 +168,40 @@ async function createDefaultConfig(appPath?: string): Promise<ApertureConfigSche
 }
 
 /**
+ * Auto-detect .app or .ipa files in current directory
+ */
+async function detectAppBundle(): Promise<string | undefined> {
+  try {
+    const files = await fs.readdir('.');
+
+    // Look for .ipa files first (most common for distribution)
+    const ipaFile = files.find((f) => f.endsWith('.ipa'));
+    if (ipaFile) {
+      return `./${ipaFile}`;
+    }
+
+    // Then look for .app bundles
+    const appFile = files.find((f) => f.endsWith('.app'));
+    if (appFile) {
+      return `./${appFile}`;
+    }
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Run interactive wizard
  */
 async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
   header('Aperture Setup Wizard');
+
+  // Auto-detect app bundle in current directory if not provided
+  if (!appPath) {
+    appPath = await detectAppBundle();
+  }
 
   // Step 1: App path
   const appAnswer = await inquirer.prompt<{ appPath: string }>([
@@ -284,7 +314,109 @@ async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
     },
   ]);
 
-  // Step 6: Guardrails (advanced users can skip)
+  // Step 6: OpenAI Configuration
+  console.log();
+  console.log('OpenAI API is used for:');
+  console.log('  • Parameterization (detecting locale-dependent inputs)');
+  console.log('  • Locale data generation (creating test data per language)');
+  console.log('  • Translations (adapting marketing copy)');
+  console.log('  • AI fallback (finding elements when selectors fail)');
+  console.log();
+
+  const { configureOpenAI } = await inquirer.prompt<{ configureOpenAI: boolean }>([
+    {
+      type: 'confirm',
+      name: 'configureOpenAI',
+      message: 'Configure OpenAI API key now?',
+      default: !!process.env.OPENAI_API_KEY, // Default to no if env var exists
+    },
+  ]);
+
+  let openaiConfig = {
+    model: 'gpt-4o-mini' as 'gpt-4o-mini' | 'gpt-4o',
+    fallbackModel: 'gpt-4o' as 'gpt-4o-mini' | 'gpt-4o',
+    maxTokens: 1000,
+    apiKey: undefined as string | undefined,
+  };
+
+  if (configureOpenAI) {
+    const openaiAnswers = await inquirer.prompt<{
+      apiKey: string;
+      model: 'gpt-4o-mini' | 'gpt-4o';
+      configureAdvanced: boolean;
+    }>([
+      {
+        type: 'password',
+        name: 'apiKey',
+        message: 'OpenAI API key (starts with sk-...):',
+        mask: '*',
+        validate: (input: string) => {
+          if (!input || input.trim().length === 0) {
+            return 'API key cannot be empty';
+          }
+          if (!input.startsWith('sk-')) {
+            return 'OpenAI API keys start with "sk-"';
+          }
+          return true;
+        },
+      },
+      {
+        type: 'list',
+        name: 'model',
+        message: 'Primary model:',
+        choices: [
+          { name: 'gpt-4o-mini (Recommended - faster, cheaper)', value: 'gpt-4o-mini' },
+          { name: 'gpt-4o (More capable, slower, expensive)', value: 'gpt-4o' },
+        ],
+        default: 'gpt-4o-mini',
+      },
+      {
+        type: 'confirm',
+        name: 'configureAdvanced',
+        message: 'Configure advanced OpenAI settings? (fallback model, max tokens)',
+        default: false,
+      },
+    ]);
+
+    openaiConfig.apiKey = openaiAnswers.apiKey;
+    openaiConfig.model = openaiAnswers.model;
+
+    if (openaiAnswers.configureAdvanced) {
+      const advancedAnswers = await inquirer.prompt<{
+        fallbackModel: 'gpt-4o-mini' | 'gpt-4o';
+        maxTokens: number;
+      }>([
+        {
+          type: 'list',
+          name: 'fallbackModel',
+          message: 'Fallback model (used if primary model fails):',
+          choices: [
+            { name: 'gpt-4o', value: 'gpt-4o' },
+            { name: 'gpt-4o-mini', value: 'gpt-4o-mini' },
+          ],
+          default: openaiAnswers.model === 'gpt-4o-mini' ? 'gpt-4o' : 'gpt-4o-mini',
+        },
+        {
+          type: 'number',
+          name: 'maxTokens',
+          message: 'Maximum tokens per request:',
+          default: 1000,
+        },
+      ]);
+
+      openaiConfig.fallbackModel = advancedAnswers.fallbackModel;
+      openaiConfig.maxTokens = advancedAnswers.maxTokens;
+    }
+  } else {
+    // User skipped OpenAI config
+    if (process.env.OPENAI_API_KEY) {
+      success('Will use OPENAI_API_KEY environment variable');
+    } else {
+      warning('OpenAI not configured. You can add it later to aperture.config.json or set OPENAI_API_KEY env var');
+    }
+  }
+
+  // Step 7: Guardrails (advanced users can skip)
   const { configureGuardrails } = await inquirer.prompt<{ configureGuardrails: boolean }>([
     {
       type: 'confirm',
@@ -330,7 +462,7 @@ async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
     ]);
   }
 
-  // Step 7: Confirmation
+  // Step 8: Confirmation
   console.log();
   header('Configuration Summary');
   keyValue('App', appAnswer.appPath);
@@ -342,6 +474,14 @@ async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
   }
   keyValue('Template Style', styleAnswer.style);
   keyValue('Output Directory', outputAnswer.outputDir);
+  keyValue(
+    'OpenAI API',
+    openaiConfig.apiKey
+      ? `Configured (${openaiConfig.model})`
+      : process.env.OPENAI_API_KEY
+        ? 'Using OPENAI_API_KEY env var'
+        : 'Not configured'
+  );
   console.log();
 
   const { confirm } = await inquirer.prompt<{ confirm: boolean }>([
@@ -371,11 +511,18 @@ async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
     templateStyle: styleAnswer.style as 'minimal' | 'modern' | 'gradient' | 'dark' | 'playful',
     outputDir: outputAnswer.outputDir,
     guardrails,
-    openai: {
-      model: 'gpt-4o-mini',
-      fallbackModel: 'gpt-4o',
-      maxTokens: 1000,
-    },
+    openai: openaiConfig.apiKey
+      ? {
+          apiKey: openaiConfig.apiKey,
+          model: openaiConfig.model,
+          fallbackModel: openaiConfig.fallbackModel,
+          maxTokens: openaiConfig.maxTokens,
+        }
+      : {
+          model: openaiConfig.model,
+          fallbackModel: openaiConfig.fallbackModel,
+          maxTokens: openaiConfig.maxTokens,
+        },
   };
 }
 
