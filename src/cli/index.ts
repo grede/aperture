@@ -11,6 +11,7 @@ import { localesCommand } from './commands/locales.js';
 import { runCommand } from './commands/run.js';
 import { exportCommand } from './commands/export.js';
 import { translationsCommand } from './commands/translations.js';
+import { importCommand } from './commands/import.js';
 
 const program = new Command();
 
@@ -94,6 +95,14 @@ program
   .option('--devices <devices>', 'Comma-separated device list (iphone,ipad) or "all" (default: all)')
   .option('--output-dir <dir>', 'Output directory for exports')
   .action(exportCommand);
+
+// Import command (US-022)
+program
+  .command('import <screenshots-dir>')
+  .description('Import existing screenshots and apply templates (US-022)')
+  .option('--name <name>', 'Import name')
+  .option('--output-dir <dir>', 'Output directory for imported screenshots')
+  .action(importCommand);
 
 // Parse arguments
 program.parse();
