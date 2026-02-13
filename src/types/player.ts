@@ -38,7 +38,7 @@ export interface ResolvedSelector {
   selector: string;
   method: SelectorMethod;
   usedAIFallback: boolean;
-  aiModel?: 'gpt-4o-mini' | 'gpt-4o';
+  aiModel?: string;
   confidence?: number;
 }
 

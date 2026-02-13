@@ -1,6 +1,7 @@
 import inquirer from 'inquirer';
 import path from 'path';
 import fs from 'fs/promises';
+import OpenAI from 'openai';
 import { deviceManager } from '../../core/device-manager.js';
 import { saveConfig, configExists } from '../../config/index.js';
 import type { ApertureConfigSchema } from '../../config/schema.js';
@@ -193,6 +194,73 @@ async function detectAppBundle(): Promise<string | undefined> {
 }
 
 /**
+ * Fetch available models from OpenAI API
+ */
+async function fetchAvailableModels(apiKey: string): Promise<string[]> {
+  try {
+    const openai = new OpenAI({ apiKey });
+    const response = await openai.models.list();
+
+    // Filter for GPT models that are suitable for chat/completion
+    const models = response.data
+      .filter((model) => {
+        const id = model.id.toLowerCase();
+        // Include GPT-4, GPT-3.5, and o1 models
+        return (
+          (id.includes('gpt-4') || id.includes('gpt-3.5') || id.startsWith('o1')) &&
+          !id.includes('vision') && // Exclude vision-only models
+          !id.includes('instruct') // Exclude instruct variants
+        );
+      })
+      .map((model) => model.id)
+      .sort((a, b) => {
+        // Sort by preference: o1 > gpt-4 > gpt-3.5
+        const order = ['o1', 'gpt-4', 'gpt-3.5'];
+        const aIndex = order.findIndex((prefix) => a.startsWith(prefix));
+        const bIndex = order.findIndex((prefix) => b.startsWith(prefix));
+        if (aIndex !== bIndex) return aIndex - bIndex;
+        return b.localeCompare(a); // Newer versions first
+      });
+
+    return models;
+  } catch (err) {
+    logger.debug({ error: err }, 'Failed to fetch OpenAI models');
+    return [];
+  }
+}
+
+/**
+ * Get model choices with fallback to defaults + manual entry
+ */
+async function getModelChoices(apiKey?: string): Promise<Array<{ name: string; value: string }>> {
+  let availableModels: string[] = [];
+
+  if (apiKey) {
+    availableModels = await fetchAvailableModels(apiKey);
+  }
+
+  if (availableModels.length > 0) {
+    return [
+      ...availableModels.map((model) => ({
+        name: model,
+        value: model,
+      })),
+      { name: 'Other (enter manually)', value: '__custom__' },
+    ];
+  }
+
+  // Fallback to hardcoded list if API call fails
+  return [
+    { name: 'gpt-4o-mini (Recommended - faster, cheaper)', value: 'gpt-4o-mini' },
+    { name: 'gpt-4o', value: 'gpt-4o' },
+    { name: 'gpt-4-turbo', value: 'gpt-4-turbo' },
+    { name: 'o1-mini', value: 'o1-mini' },
+    { name: 'o1', value: 'o1' },
+    { name: 'Other (enter manually)', value: '__custom__' },
+  ];
+}
+
+/**
  * Run interactive wizard
  */
 async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
@@ -333,18 +401,15 @@ async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
   ]);
 
   let openaiConfig = {
-    model: 'gpt-4o-mini' as 'gpt-4o-mini' | 'gpt-4o',
-    fallbackModel: 'gpt-4o' as 'gpt-4o-mini' | 'gpt-4o',
+    model: 'gpt-4o-mini' as string,
+    fallbackModel: 'gpt-4o' as string,
     maxTokens: 1000,
     apiKey: undefined as string | undefined,
   };
 
   if (configureOpenAI) {
-    const openaiAnswers = await inquirer.prompt<{
-      apiKey: string;
-      model: 'gpt-4o-mini' | 'gpt-4o';
-      configureAdvanced: boolean;
-    }>([
+    // First, get API key
+    const apiKeyAnswer = await inquirer.prompt<{ apiKey: string }>([
       {
         type: 'password',
         name: 'apiKey',
@@ -360,14 +425,31 @@ async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
           return true;
         },
       },
+    ]);
+
+    openaiConfig.apiKey = apiKeyAnswer.apiKey;
+
+    // Fetch available models using the API key
+    console.log();
+    console.log('⏳ Fetching available models from OpenAI...');
+    const modelChoices = await getModelChoices(apiKeyAnswer.apiKey);
+    if (modelChoices.length > 0 && modelChoices[0].value !== '__custom__') {
+      success('✓ Loaded latest model list from OpenAI API');
+    } else {
+      warning('⚠ Could not fetch models, showing default options');
+    }
+    console.log();
+
+    // Ask for model selection
+    const modelAnswer = await inquirer.prompt<{
+      model: string;
+      configureAdvanced: boolean;
+    }>([
       {
         type: 'list',
         name: 'model',
         message: 'Primary model:',
-        choices: [
-          { name: 'gpt-4o-mini (Recommended - faster, cheaper)', value: 'gpt-4o-mini' },
-          { name: 'gpt-4o (More capable, slower, expensive)', value: 'gpt-4o' },
-        ],
+        choices: modelChoices,
         default: 'gpt-4o-mini',
       },
       {
@@ -378,23 +460,37 @@ async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
       },
     ]);
 
-    openaiConfig.apiKey = openaiAnswers.apiKey;
-    openaiConfig.model = openaiAnswers.model;
+    // If user selected custom, prompt for manual entry
+    if (modelAnswer.model === '__custom__') {
+      const customModel = await inquirer.prompt<{ customModel: string }>([
+        {
+          type: 'input',
+          name: 'customModel',
+          message: 'Enter model name (e.g., gpt-4o-mini, o1-preview):',
+          validate: (input: string) => {
+            if (!input || input.trim().length === 0) {
+              return 'Model name cannot be empty';
+            }
+            return true;
+          },
+        },
+      ]);
+      openaiConfig.model = customModel.customModel;
+    } else {
+      openaiConfig.model = modelAnswer.model;
+    }
 
-    if (openaiAnswers.configureAdvanced) {
+    if (modelAnswer.configureAdvanced) {
       const advancedAnswers = await inquirer.prompt<{
-        fallbackModel: 'gpt-4o-mini' | 'gpt-4o';
+        fallbackModel: string;
         maxTokens: number;
       }>([
         {
           type: 'list',
           name: 'fallbackModel',
           message: 'Fallback model (used if primary model fails):',
-          choices: [
-            { name: 'gpt-4o', value: 'gpt-4o' },
-            { name: 'gpt-4o-mini', value: 'gpt-4o-mini' },
-          ],
-          default: openaiAnswers.model === 'gpt-4o-mini' ? 'gpt-4o' : 'gpt-4o-mini',
+          choices: modelChoices,
+          default: openaiConfig.model === 'gpt-4o-mini' ? 'gpt-4o' : 'gpt-4o-mini',
         },
         {
           type: 'number',
@@ -404,7 +500,26 @@ async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
         },
       ]);
 
-      openaiConfig.fallbackModel = advancedAnswers.fallbackModel;
+      // If user selected custom for fallback model, prompt for manual entry
+      if (advancedAnswers.fallbackModel === '__custom__') {
+        const customFallback = await inquirer.prompt<{ customModel: string }>([
+          {
+            type: 'input',
+            name: 'customModel',
+            message: 'Enter fallback model name:',
+            validate: (input: string) => {
+              if (!input || input.trim().length === 0) {
+                return 'Model name cannot be empty';
+              }
+              return true;
+            },
+          },
+        ]);
+        openaiConfig.fallbackModel = customFallback.customModel;
+      } else {
+        openaiConfig.fallbackModel = advancedAnswers.fallbackModel;
+      }
+
       openaiConfig.maxTokens = advancedAnswers.maxTokens;
     }
   } else {

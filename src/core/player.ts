@@ -544,8 +544,8 @@ export class Player {
     const systemPrompt = this.buildAIFallbackSystemPrompt();
     const userPrompt = this.buildAIFallbackUserPrompt(originalSelector, accessibilityTree);
 
-    // Try GPT-4o-mini first
-    let model: 'gpt-4o-mini' | 'gpt-4o' = 'gpt-4o-mini';
+    // Try GPT-4o-mini first (or configured model)
+    let model: string = 'gpt-4o-mini';
     let response;
 
     try {

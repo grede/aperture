@@ -6,8 +6,8 @@ import { logger } from './logger.js';
  */
 export interface AIClientConfig {
   apiKey?: string;
-  model?: 'gpt-4o-mini' | 'gpt-4o';
-  fallbackModel?: 'gpt-4o-mini' | 'gpt-4o';
+  model?: string;
+  fallbackModel?: string;
   maxTokens?: number;
 }
 

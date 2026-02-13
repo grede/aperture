@@ -62,10 +62,10 @@ export interface GuardrailsConfig {
 export interface OpenAIConfig {
   /** API key */
   apiKey?: string;
-  /** Model for parameterization and fallback */
-  model: 'gpt-4o-mini' | 'gpt-4o';
+  /** Model for parameterization and fallback (e.g., gpt-4o-mini, gpt-4o, o1-mini, o1) */
+  model: string;
   /** Fallback model if primary fails */
-  fallbackModel?: 'gpt-4o-mini' | 'gpt-4o';
+  fallbackModel?: string;
   /** Max tokens per request */
   maxTokens?: number;
 }

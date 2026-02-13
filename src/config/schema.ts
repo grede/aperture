@@ -31,8 +31,8 @@ export const apertureConfigSchema = z.object({
   openai: z
     .object({
       apiKey: z.string().optional(),
-      model: z.enum(['gpt-4o-mini', 'gpt-4o']).default('gpt-4o-mini'),
-      fallbackModel: z.enum(['gpt-4o-mini', 'gpt-4o']).optional(),
+      model: z.string().default('gpt-4o-mini'),
+      fallbackModel: z.string().optional(),
       maxTokens: z.number().int().positive().default(1000),
     })
     .optional(),
