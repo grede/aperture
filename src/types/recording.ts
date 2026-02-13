@@ -40,6 +40,20 @@ export interface Step {
   timestamp: number;
   /** Optional description */
   description?: string;
+  /** Optional verification checkpoint (US-013) */
+  checkpoint?: StepCheckpoint;
+}
+
+/**
+ * Step verification checkpoint (US-013)
+ */
+export interface StepCheckpoint {
+  /** Elements that must be present in accessibility tree */
+  requiredElements?: string[];
+  /** Elements that must NOT be present in accessibility tree */
+  forbiddenElements?: string[];
+  /** Expected screen/view controller name */
+  expectedScreen?: string;
 }
 
 /**

@@ -238,10 +238,118 @@ export class Player {
     // Execute the action
     await this.executeAction(step, resolved);
 
-    // Verify step completed (basic verification for now)
-    await sleep(500); // Brief wait for UI to settle
+    // Wait for UI to settle
+    await sleep(500);
+
+    // Verify step completed (US-013)
+    await this.verifyStep(step);
 
     return resolved;
+  }
+
+  /**
+   * Verify step execution deterministically (US-013)
+   */
+  private async verifyStep(step: Step): Promise<void> {
+    logger.debug({ stepIndex: step.index }, 'Verifying step');
+
+    try {
+      // Capture current accessibility tree
+      const currentTree = await this.wda.getAccessibilityTree();
+
+      // Basic verification: ensure tree is not empty (app is responsive)
+      if (!currentTree || currentTree.trim().length === 0) {
+        throw new StepFailedError(
+          'Verification failed: Accessibility tree is empty (app may have crashed)',
+          'VERIFICATION_FAILED',
+          { stepIndex: step.index }
+        );
+      }
+
+      const treeNormalized = currentTree.toLowerCase();
+
+      // Check for common error indicators in the tree
+      if (treeNormalized.includes('alert') || treeNormalized.includes('error occurred')) {
+        logger.warn({ stepIndex: step.index }, 'Possible error dialog detected in accessibility tree');
+
+        // Check for specific error keywords
+        const errorKeywords = [
+          'cannot connect',
+          'network error',
+          'server error',
+          'invalid',
+          'failed to',
+        ];
+
+        for (const keyword of errorKeywords) {
+          if (treeNormalized.includes(keyword)) {
+            throw new StepFailedError(
+              `Verification failed: Error dialog detected with message containing "${keyword}"`,
+              'VERIFICATION_FAILED',
+              { stepIndex: step.index, keyword }
+            );
+          }
+        }
+      }
+
+      // US-013: Check manual checkpoint assertions if defined
+      if (step.checkpoint) {
+        logger.debug({ stepIndex: step.index }, 'Checking manual checkpoint assertions');
+
+        // Check required elements
+        if (step.checkpoint.requiredElements) {
+          for (const required of step.checkpoint.requiredElements) {
+            if (!currentTree.includes(required)) {
+              throw new StepFailedError(
+                `Verification failed: Required element not found: "${required}"`,
+                'VERIFICATION_FAILED',
+                { stepIndex: step.index, requiredElement: required }
+              );
+            }
+          }
+        }
+
+        // Check forbidden elements
+        if (step.checkpoint.forbiddenElements) {
+          for (const forbidden of step.checkpoint.forbiddenElements) {
+            if (currentTree.includes(forbidden)) {
+              throw new StepFailedError(
+                `Verification failed: Forbidden element found: "${forbidden}"`,
+                'VERIFICATION_FAILED',
+                { stepIndex: step.index, forbiddenElement: forbidden }
+              );
+            }
+          }
+        }
+
+        // Check expected screen
+        if (step.checkpoint.expectedScreen) {
+          if (!currentTree.includes(step.checkpoint.expectedScreen)) {
+            throw new StepFailedError(
+              `Verification failed: Expected screen not found: "${step.checkpoint.expectedScreen}"`,
+              'VERIFICATION_FAILED',
+              { stepIndex: step.index, expectedScreen: step.checkpoint.expectedScreen }
+            );
+          }
+        }
+
+        logger.debug({ stepIndex: step.index }, 'Checkpoint assertions passed');
+      }
+
+      logger.debug({ stepIndex: step.index }, 'Step verification passed');
+    } catch (error) {
+      if (error instanceof StepFailedError) {
+        throw error;
+      }
+
+      // If we can't get the tree, it's likely a serious issue
+      logger.error({ stepIndex: step.index, error }, 'Failed to verify step');
+      throw new StepFailedError(
+        'Verification failed: Could not capture accessibility tree',
+        'VERIFICATION_FAILED',
+        { stepIndex: step.index, error }
+      );
+    }
   }
 
   /**
