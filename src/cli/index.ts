@@ -55,6 +55,7 @@ program
   .option('--output-dir <dir>', 'Output directory for screenshots')
   .option('--no-auto-appium', 'Disable automatic Appium server management')
   .option('--appium-port <port>', 'Appium server port (default: 8100)')
+  .option('--no-cache', 'Force fresh selector resolution, ignore cache (US-016)')
   .action(playCommand);
 
 // Parameterize command
@@ -76,6 +77,7 @@ program
   .option('--output-dir <dir>', 'Output directory for screenshots')
   .option('--no-auto-appium', 'Disable automatic Appium server management')
   .option('--appium-port <port>', 'Appium server port (default: 8100)')
+  .option('--no-cache', 'Force fresh selector resolution, ignore cache (US-016)')
   .action(runCommand);
 
 // Export command (placeholder)

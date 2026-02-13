@@ -18,6 +18,7 @@ interface RunOptions {
   outputDir?: string;
   noAutoAppium?: boolean;
   appiumPort?: number;
+  noCache?: boolean;
 }
 
 /**
@@ -163,6 +164,7 @@ export async function runCommand(templateName: string, options: RunOptions) {
           runTimeout: config.guardrails.runTimeout,
           forbiddenActions: config.guardrails.forbiddenActions,
           enableAIFallback: !!config.openai?.apiKey, // US-012: Enable AI fallback if API key configured
+          noCache: options.noCache, // US-016: Disable caching if requested
         });
 
         const playbackResult = await player.replay(localizedRecording, locale);

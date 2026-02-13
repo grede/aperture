@@ -16,6 +16,7 @@ export interface PlayOptions {
   outputDir?: string;
   noAutoAppium?: boolean;
   appiumPort?: string;
+  noCache?: boolean;
 }
 
 /**
@@ -96,6 +97,7 @@ export async function playCommand(recordingName: string, options: PlayOptions = 
       forbiddenActions: config.guardrails.forbiddenActions,
       outputDir: options.outputDir || config.outputDir,
       hideStatusBar: true,
+      noCache: options.noCache,
     });
 
     // Start playback

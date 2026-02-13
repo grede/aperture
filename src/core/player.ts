@@ -3,6 +3,7 @@ import type {
   PlaybackResult,
   StepResult,
   ResolvedSelector,
+  SelectorCache,
 } from '../types/player.js';
 import { WDAConnection } from './wda-connection.js';
 import { ScreenshotManager } from './screenshot.js';
@@ -10,6 +11,8 @@ import { StepFailedError } from '../types/errors.js';
 import { logger } from '../utils/logger.js';
 import { retry, sleep } from '../utils/retry.js';
 import { aiClient } from '../utils/ai-client.js';
+import { selectorCacheManager } from './selector-cache.js';
+import { sha256 } from '../utils/hash.js';
 
 /**
  * Player options
@@ -31,6 +34,8 @@ export interface PlayerOptions {
   runTimeout?: number;
   /** Forbidden action patterns (US-015) */
   forbiddenActions?: string[];
+  /** Disable selector caching (US-016) */
+  noCache?: boolean;
 }
 
 /**
@@ -40,6 +45,7 @@ export class Player {
   private wda: WDAConnection;
   private screenshot: ScreenshotManager;
   private options: Required<PlayerOptions>;
+  private selectorCache: SelectorCache | null = null;
 
   constructor(wda: WDAConnection, udid: string, options: PlayerOptions = {}) {
     this.wda = wda;
@@ -53,6 +59,7 @@ export class Player {
       maxSteps: options.maxSteps ?? 50,
       runTimeout: options.runTimeout ?? 300,
       forbiddenActions: options.forbiddenActions ?? [],
+      noCache: options.noCache ?? false,
     };
   }
 
@@ -72,6 +79,22 @@ export class Player {
         'MAX_STEPS_EXCEEDED',
         { stepCount: recording.steps.length, maxSteps: this.options.maxSteps }
       );
+    }
+
+    // US-016: Load selector cache if not disabled
+    const templateHash = sha256(JSON.stringify(recording));
+    if (!this.options.noCache) {
+      this.selectorCache = await selectorCacheManager.load(recording.id, locale || 'default', templateHash);
+
+      if (this.selectorCache) {
+        logger.info(
+          { recordingId: recording.id, locale, cachedSelectors: this.selectorCache.entries.length },
+          'Using cached selectors'
+        );
+      } else {
+        // Initialize new cache
+        this.selectorCache = selectorCacheManager.initCache(recording.id, locale, templateHash);
+      }
     }
 
     const startTime = Date.now();
@@ -134,6 +157,12 @@ export class Player {
     const successCount = stepResults.filter((r) => r.status === 'success').length;
     const failureCount = stepResults.filter((r) => r.status === 'failed').length;
     const aiFallbackCount = stepResults.filter((r) => r.usedAIFallback).length;
+
+    // US-016: Save selector cache if enabled and run was successful
+    if (!this.options.noCache && this.selectorCache && failureCount === 0) {
+      await selectorCacheManager.save(this.selectorCache);
+      logger.info({ cacheEntries: this.selectorCache.entries.length }, 'Selector cache saved');
+    }
 
     const result: PlaybackResult = {
       recordingId: recording.id,
@@ -233,7 +262,7 @@ export class Player {
    */
   private async resolveAndExecute(step: Step): Promise<ResolvedSelector> {
     // Try selector cascade: accessibilityId → accessibilityLabel → label → xpath
-    const resolved = await this.resolveElement(step.selector);
+    const resolved = await this.resolveElement(step.selector, step.index);
 
     // Execute the action
     await this.executeAction(step, resolved);
@@ -243,6 +272,18 @@ export class Player {
 
     // Verify step completed (US-013)
     await this.verifyStep(step);
+
+    // US-016: Cache successful selector resolution
+    if (this.selectorCache && resolved.method !== 'cached') {
+      const originalSelector = JSON.stringify(step.selector);
+      selectorCacheManager.addEntry(this.selectorCache, {
+        stepIndex: step.index,
+        originalSelector,
+        resolvedSelector: resolved.selector,
+        method: resolved.method,
+        timestamp: Date.now(),
+      });
+    }
 
     return resolved;
   }
@@ -355,8 +396,43 @@ export class Player {
   /**
    * Resolve element using selector cascade
    */
-  private async resolveElement(selector: ElementSelector): Promise<ResolvedSelector> {
+  private async resolveElement(selector: ElementSelector, stepIndex: number): Promise<ResolvedSelector> {
     const timeout = this.options.stepTimeout * 1000;
+
+    // US-016: Check cache first if available
+    if (this.selectorCache) {
+      const cached = selectorCacheManager.getCachedSelector(this.selectorCache, stepIndex);
+      if (cached) {
+        logger.debug({ stepIndex, method: cached.method }, 'Using cached selector');
+
+        try {
+          let element;
+
+          if (cached.method === 'accessibilityId' || cached.method === 'accessibilityLabel') {
+            element = await this.wda.findByAccessibilityId(cached.resolvedSelector);
+          } else if (cached.method === 'label') {
+            const xpath = `//*[@label="${cached.resolvedSelector}"]`;
+            element = await this.wda.findByXPath(xpath);
+          } else {
+            element = await this.wda.findByXPath(cached.resolvedSelector);
+          }
+
+          const exists = await element.waitForExist({ timeout });
+
+          if (exists) {
+            return {
+              selector: cached.resolvedSelector,
+              method: 'cached',
+              usedAIFallback: false,
+            };
+          } else {
+            logger.warn({ stepIndex }, 'Cached selector failed, falling back to cascade');
+          }
+        } catch (error) {
+          logger.warn({ stepIndex, error }, 'Cached selector failed, falling back to cascade');
+        }
+      }
+    }
 
     // 1. Try accessibilityIdentifier (most stable)
     if (selector.accessibilityIdentifier) {
