@@ -43,7 +43,10 @@ export type StepErrorCode =
   | 'AI_FALLBACK_FAILED'
   | 'STEP_TIMEOUT'
   | 'VERIFICATION_FAILED'
-  | 'ACTION_FAILED';
+  | 'ACTION_FAILED'
+  | 'MAX_STEPS_EXCEEDED'
+  | 'RUN_TIMEOUT_EXCEEDED'
+  | 'FORBIDDEN_ACTION';
 
 /**
  * AI-related errors (fallback, rate limits, etc.)

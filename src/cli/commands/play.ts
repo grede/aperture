@@ -91,6 +91,9 @@ export async function playCommand(recordingName: string, options: PlayOptions = 
     const player = new Player(wda, device.udid, {
       stepTimeout: config.guardrails.stepTimeout,
       stepRetries: config.guardrails.stepRetries,
+      maxSteps: config.guardrails.maxSteps,
+      runTimeout: config.guardrails.runTimeout,
+      forbiddenActions: config.guardrails.forbiddenActions,
       outputDir: options.outputDir || config.outputDir,
       hideStatusBar: true,
     });

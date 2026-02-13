@@ -24,6 +24,12 @@ export interface PlayerOptions {
   outputDir?: string;
   /** Hide status bar in screenshots */
   hideStatusBar?: boolean;
+  /** Maximum steps per recording (US-015) */
+  maxSteps?: number;
+  /** Total run timeout in seconds (US-015) */
+  runTimeout?: number;
+  /** Forbidden action patterns (US-015) */
+  forbiddenActions?: string[];
 }
 
 /**
@@ -43,6 +49,9 @@ export class Player {
       enableAIFallback: options.enableAIFallback ?? false,
       outputDir: options.outputDir ?? './output',
       hideStatusBar: options.hideStatusBar ?? true,
+      maxSteps: options.maxSteps ?? 50,
+      runTimeout: options.runTimeout ?? 300,
+      forbiddenActions: options.forbiddenActions ?? [],
     };
   }
 
@@ -55,11 +64,30 @@ export class Player {
       'Starting playback'
     );
 
+    // US-015: Check maxSteps guardrail
+    if (recording.steps.length > this.options.maxSteps) {
+      throw new StepFailedError(
+        `Recording has ${recording.steps.length} steps, exceeding maxSteps limit of ${this.options.maxSteps}`,
+        'MAX_STEPS_EXCEEDED',
+        { stepCount: recording.steps.length, maxSteps: this.options.maxSteps }
+      );
+    }
+
     const startTime = Date.now();
     const stepResults: StepResult[] = [];
     const screenshots: string[] = [];
 
     for (const step of recording.steps) {
+      // US-015: Check runTimeout guardrail
+      const elapsed = (Date.now() - startTime) / 1000;
+      if (elapsed > this.options.runTimeout) {
+        logger.error(
+          { elapsed, timeout: this.options.runTimeout },
+          'Run timeout exceeded, stopping playback'
+        );
+        break;
+      }
+
       const result = await this.executeStep(step);
       stepResults.push(result);
 
@@ -142,6 +170,20 @@ export class Player {
       { index: step.index, action: step.action },
       'Executing step'
     );
+
+    // US-015: Check forbiddenActions guardrail
+    if (this.options.forbiddenActions.length > 0) {
+      const stepText = `${step.action} ${step.value || ''} ${step.selector.label || ''}`.toLowerCase();
+      for (const forbidden of this.options.forbiddenActions) {
+        if (stepText.includes(forbidden.toLowerCase())) {
+          throw new StepFailedError(
+            `Step contains forbidden action pattern: "${forbidden}"`,
+            'FORBIDDEN_ACTION',
+            { step, forbiddenPattern: forbidden }
+          );
+        }
+      }
+    }
 
     try {
       const resolved = await retry(
