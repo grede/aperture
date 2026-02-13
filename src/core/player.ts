@@ -9,6 +9,7 @@ import { ScreenshotManager } from './screenshot.js';
 import { StepFailedError } from '../types/errors.js';
 import { logger } from '../utils/logger.js';
 import { retry, sleep } from '../utils/retry.js';
+import { aiClient } from '../utils/ai-client.js';
 
 /**
  * Player options
@@ -322,14 +323,21 @@ export class Player {
       }
     }
 
-    // 5. AI fallback (placeholder - not implemented in MVP)
+    // 5. AI fallback (US-012)
     if (this.options.enableAIFallback) {
-      logger.warn('AI fallback not yet implemented');
-      throw new StepFailedError(
-        'Element not found and AI fallback not available',
-        'SELECTOR_NOT_FOUND',
-        { selector }
-      );
+      logger.info({ selector }, 'Trying AI fallback for element location');
+
+      try {
+        const aiResolved = await this.tryAIFallback(selector);
+        return aiResolved;
+      } catch (error) {
+        logger.error({ selector, error }, 'AI fallback failed');
+        throw new StepFailedError(
+          'Element not found even with AI fallback: ' + (error as Error).message,
+          'AI_FALLBACK_FAILED',
+          { selector, error }
+        );
+      }
     }
 
     throw new StepFailedError(
@@ -337,6 +345,139 @@ export class Player {
       'SELECTOR_NOT_FOUND',
       { selector }
     );
+  }
+
+  /**
+   * Try to locate element using AI fallback (US-012)
+   */
+  private async tryAIFallback(originalSelector: ElementSelector): Promise<ResolvedSelector> {
+    logger.debug('Capturing accessibility tree for AI analysis');
+
+    // Get current accessibility tree
+    const accessibilityTree = await this.wda.getAccessibilityTree();
+
+    // Build AI prompt
+    const systemPrompt = this.buildAIFallbackSystemPrompt();
+    const userPrompt = this.buildAIFallbackUserPrompt(originalSelector, accessibilityTree);
+
+    // Try GPT-4o-mini first
+    let model: 'gpt-4o-mini' | 'gpt-4o' = 'gpt-4o-mini';
+    let response;
+
+    try {
+      logger.debug('Trying GPT-4o-mini for element location');
+      response = await aiClient.complete({
+        systemPrompt,
+        userPrompt,
+        temperature: 0.3, // Lower temperature for consistency
+        responseFormat: 'json',
+      });
+    } catch (error) {
+      // Fallback to GPT-4o
+      logger.info('GPT-4o-mini failed, trying GPT-4o');
+      model = 'gpt-4o';
+
+      // Reinitialize with gpt-4o as primary model temporarily
+      const currentConfig = aiClient['config'];
+      aiClient.initialize({ ...currentConfig, model: 'gpt-4o' });
+
+      response = await aiClient.complete({
+        systemPrompt,
+        userPrompt,
+        temperature: 0.3,
+        responseFormat: 'json',
+      });
+
+      // Restore original model
+      aiClient.initialize(currentConfig);
+    }
+
+    // Parse AI response
+    const aiResponse = aiClient.parseJSON<{
+      selector: string;
+      method: 'accessibilityId' | 'label' | 'xpath';
+      reasoning: string;
+    }>(response.content);
+
+    logger.info(
+      { model, selector: aiResponse.selector, method: aiResponse.method, reasoning: aiResponse.reasoning },
+      'AI suggested element selector'
+    );
+
+    // Try to locate element with AI-suggested selector
+    const timeout = this.options.stepTimeout * 1000;
+
+    try {
+      let element;
+
+      if (aiResponse.method === 'accessibilityId') {
+        element = await this.wda.findByAccessibilityId(aiResponse.selector);
+      } else if (aiResponse.method === 'label') {
+        const xpath = `//*[@label="${aiResponse.selector}"]`;
+        element = await this.wda.findByXPath(xpath);
+      } else {
+        element = await this.wda.findByXPath(aiResponse.selector);
+      }
+
+      const exists = await element.waitForExist({ timeout });
+
+      if (exists) {
+        logger.info('AI fallback successfully located element');
+        return {
+          selector: aiResponse.selector,
+          method: aiResponse.method,
+          usedAIFallback: true,
+          aiModel: model,
+        };
+      } else {
+        throw new Error('AI-suggested element does not exist');
+      }
+    } catch (error) {
+      throw new Error(`Failed to locate element with AI-suggested selector: ${aiResponse.selector}`);
+    }
+  }
+
+  /**
+   * Build system prompt for AI element location
+   */
+  private buildAIFallbackSystemPrompt(): string {
+    return `You are an expert at analyzing iOS accessibility trees and locating UI elements.
+
+Your task is to find a UI element in the iOS accessibility tree based on the original selector that failed.
+
+Return your response as JSON with:
+{
+  "selector": "the accessibilityId, label text, or xpath to use",
+  "method": "accessibilityId" | "label" | "xpath",
+  "reasoning": "brief explanation of why this element matches"
+}
+
+Guidelines:
+- Prefer accessibilityId if available (most stable)
+- Use label text for buttons and text elements
+- Use xpath only as last resort
+- Look for elements with similar labels, roles, or hierarchy
+- Consider that text may have changed slightly but UI structure is similar`;
+  }
+
+  /**
+   * Build user prompt for AI element location
+   */
+  private buildAIFallbackUserPrompt(selector: ElementSelector, accessibilityTree: string): string {
+    return `I'm trying to locate a UI element that was originally identified with these selectors:
+
+${selector.accessibilityIdentifier ? `- accessibilityId: "${selector.accessibilityIdentifier}"` : ''}
+${selector.accessibilityLabel ? `- accessibilityLabel: "${selector.accessibilityLabel}"` : ''}
+${selector.label ? `- label: "${selector.label}"` : ''}
+${selector.elementType ? `- elementType: "${selector.elementType}"` : ''}
+
+None of these selectors worked. Here's the current accessibility tree:
+
+\`\`\`xml
+${accessibilityTree}
+\`\`\`
+
+Please analyze the tree and suggest the best selector to locate this element. Return as JSON.`;
   }
 
   /**

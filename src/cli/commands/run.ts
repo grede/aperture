@@ -7,6 +7,7 @@ import { connectToWDA } from '../../core/wda-connection.js';
 import { Player } from '../../core/player.js';
 import { appiumManager } from '../../core/appium-manager.js';
 import { logger } from '../../utils/logger.js';
+import { aiClient } from '../../utils/ai-client.js';
 import { error, success, warning, header, info, createSpinner } from '../ui.js';
 import type { Recording, Step } from '../../types/recording.js';
 import type { LocaleData } from '../../types/locale.js';
@@ -28,6 +29,22 @@ export async function runCommand(templateName: string, options: RunOptions) {
 
     // Load config
     const config = await loadConfig();
+
+    // Initialize AI client (US-012)
+    if (config.openai?.apiKey) {
+      aiClient.initialize({
+        apiKey: config.openai.apiKey,
+        model: config.openai.model,
+        fallbackModel: config.openai.fallbackModel,
+        maxTokens: config.openai.maxTokens,
+      });
+    } else {
+      warning('OpenAI API key not configured - AI fallback disabled');
+      console.log();
+      console.log('AI fallback helps locate elements when selectors fail.');
+      console.log('Add your API key to aperture.config.json to enable it.');
+      console.log();
+    }
 
     // Determine target locales
     let targetLocales: string[];
@@ -145,6 +162,7 @@ export async function runCommand(templateName: string, options: RunOptions) {
           maxSteps: config.guardrails.maxSteps,
           runTimeout: config.guardrails.runTimeout,
           forbiddenActions: config.guardrails.forbiddenActions,
+          enableAIFallback: !!config.openai?.apiKey, // US-012: Enable AI fallback if API key configured
         });
 
         const playbackResult = await player.replay(localizedRecording, locale);
