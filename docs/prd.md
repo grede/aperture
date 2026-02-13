@@ -330,6 +330,495 @@ CLI (Commander.js)
   └── WebServer (Express + WebSocket for UI)
 ```
 
+### Project Structure
+
+```
+aperture/
+├── package.json
+├── tsconfig.json
+├── aperture.config.json                # Default/example project config
+├── src/
+│   ├── index.ts                        # Main entry point, wires modules together
+│   ├── types/
+│   │   ├── index.ts                    # Re-exports all types
+│   │   ├── recording.ts                # Recording, Step, ElementSelector, ScreenshotPoint
+│   │   ├── template.ts                 # Template, Parameter
+│   │   ├── locale.ts                   # LocaleData, LocaleConfig
+│   │   ├── device.ts                   # SimulatorDevice, DeviceState, BootStatus
+│   │   ├── player.ts                   # PlaybackResult, StepResult, StepStatus
+│   │   ├── export.ts                   # ExportConfig, ExportResult, TemplateStyle
+│   │   └── errors.ts                   # ApertureError, StepFailedError, DeviceError, AIFallbackError
+│   ├── config/
+│   │   ├── index.ts                    # Config loader: reads aperture.config.json, merges CLI flags
+│   │   ├── schema.ts                   # Zod schema for config validation
+│   │   └── defaults.ts                 # Default values for all config fields
+│   ├── utils/
+│   │   ├── logger.ts                   # Structured logger (pino) with context binding
+│   │   ├── exec.ts                     # Wrapper around child_process.execFile for xcrun commands
+│   │   ├── retry.ts                    # Generic retry helper with exponential backoff
+│   │   ├── hash.ts                     # SHA-256 hashing for cache invalidation
+│   │   └── ai-client.ts               # OpenAI client singleton, model selection, token tracking
+│   ├── core/
+│   │   ├── device-manager.ts           # SimulatorDevice lifecycle: list, boot, shutdown, install, locale
+│   │   ├── recorder.ts                 # Action capture via WebDriverAgent event stream
+│   │   ├── player.ts                   # Step-by-step replay engine with selector cascade + AI fallback
+│   │   ├── parameterizer.ts            # GPT-4o-mini analysis of recordings → parameterized templates
+│   │   └── locale-manager.ts           # Read/write GlobalPreferences.plist, reboot, wait-for-ready
+│   ├── templates/
+│   │   ├── template-engine.ts          # Sharp-based compositor: layers background + frame + screenshot + text
+│   │   ├── styles/                     # Built-in template style definitions
+│   │   │   ├── minimal.json
+│   │   │   ├── modern.json
+│   │   │   ├── gradient.json
+│   │   │   ├── dark.json
+│   │   │   └── playful.json
+│   │   └── assets/                     # Static assets for templates
+│   │       ├── frames/                 # Device frame SVGs (iphone-15.svg, iphone-14.svg, etc.)
+│   │       ├── fonts/                  # Bundled fonts for text overlays
+│   │       └── backgrounds/            # Gradient/pattern background PNGs
+│   ├── translations/
+│   │   └── translation-service.ts      # GPT-4o-mini translation with cache, manual override support
+│   ├── web/
+│   │   ├── server.ts                   # Express app setup, route registration, WebSocket init
+│   │   ├── routes/
+│   │   │   ├── api.ts                  # REST endpoints: /devices, /recordings, /templates, /export
+│   │   │   └── ws.ts                   # WebSocket handlers: live Simulator stream, recording events
+│   │   └── frontend/                   # Static frontend (Vite build output or plain HTML/JS)
+│   │       ├── index.html
+│   │       ├── recorder.js             # Simulator mirror + click capture + screenshot marking
+│   │       └── preview.js              # Template preview gallery with locale switcher
+│   ├── cli/
+│   │   ├── index.ts                    # Commander.js program definition, registers all commands
+│   │   ├── commands/
+│   │   │   ├── init.ts                 # `aperture init` — create config, install app
+│   │   │   ├── devices.ts              # `aperture devices` — list booted Simulators
+│   │   │   ├── connect.ts              # `aperture connect` — establish WDA session
+│   │   │   ├── record.ts              # `aperture record` — start recording session
+│   │   │   ├── parameterize.ts         # `aperture parameterize` — AI analysis of recording
+│   │   │   ├── play.ts                 # `aperture play` — replay a recording/template
+│   │   │   ├── run.ts                  # `aperture run` — batch replay across all locales
+│   │   │   ├── locales.ts              # `aperture locales generate` — generate locale test data
+│   │   │   ├── translations.ts         # `aperture translations generate` — generate marketing copy
+│   │   │   ├── export.ts               # `aperture export` — apply templates, output PNGs
+│   │   │   ├── import.ts               # `aperture import` — import existing screenshots
+│   │   │   └── web.ts                  # `aperture web` — start web UI server
+│   │   └── ui.ts                       # CLI UI helpers: ora spinners, chalk formatting, prompts
+│   └── queue/                          # Future: multi-tenant job queue (not implemented in M1)
+│       ├── queue-manager.ts            # BullMQ queue setup, job definitions
+│       ├── workers/
+│       │   └── pipeline-worker.ts      # Worker that executes a full pipeline run
+│       └── pool/
+│           └── simulator-pool.ts       # Simulator checkout/checkin pool manager
+├── tests/
+│   ├── unit/                           # Unit tests per module
+│   ├── integration/                    # Integration tests (require Simulator)
+│   └── fixtures/                       # Test recordings, mock accessibility trees
+├── dist/                               # Compiled output (gitignored)
+└── docs/
+    └── prd.md                          # This document
+```
+
+### Pipeline Data Flow
+
+#### 1. Record Flow
+
+```
+CLI: `aperture record --name onboarding`
+         │
+         ▼
+   DeviceManager.getConnectedDevice()
+         │ returns SimulatorDevice { udid, wdaSessionUrl }
+         ▼
+   Recorder.startSession(device, recordingName)
+         │
+         ├── Subscribes to WDA event stream for tap/type/scroll actions
+         ├── On each user action:
+         │     ├── Captures action type + element selector from WDA response
+         │     ├── Snapshots iOS accessibility tree via WDA /source endpoint
+         │     └── Appends Step { index, action, selector, accessibilityTree, timestamp }
+         ├── On "mark screenshot" hotkey/button:
+         │     └── Appends ScreenshotPoint { afterStep, label, accessibilityTreeHash }
+         │
+         ▼
+   Recorder.stopSession()
+         │ validates ≥ 1 screenshot point
+         ▼
+   Writes: recordings/onboarding.json
+         → Recording { id, name, bundleId, steps[], screenshotPoints[], createdAt }
+```
+
+#### 2. Parameterize Flow
+
+```
+CLI: `aperture parameterize onboarding`
+         │
+         ▼
+   Reads: recordings/onboarding.json
+         │
+         ▼
+   Parameterizer.analyze(recording)
+         │
+         ├── Filters steps where action === 'type'
+         ├── Builds prompt with step context + typed values
+         ├── Sends to GPT-4o-mini:
+         │     "Given these typed values in an app walkthrough,
+         │      identify which are locale-dependent test data.
+         │      Return parameter name + description for each."
+         ├── Receives: [ { stepIndex: 3, name: "user_name", description: "..." }, ... ]
+         │
+         ▼
+   Parameterizer.confirmWithUser(suggestions)
+         │ Interactive CLI: user accepts/edits/rejects each suggestion
+         │
+         ▼
+   Writes: templates/onboarding.json
+         → Template { ...recording, parameters[] }
+   Original recording is NOT modified.
+```
+
+#### 3. Locale Generation Flow
+
+```
+CLI: `aperture locales generate --template onboarding`
+         │
+         ▼
+   Reads: templates/onboarding.json → extracts Parameter[]
+   Reads: aperture.config.json → extracts locales[] (e.g., ["de","fr","ja","ko","es"])
+         │
+         ▼
+   TranslationService.generateLocaleData(parameters, locales)
+         │
+         ├── For each locale:
+         │     ├── Builds prompt: "Generate culturally appropriate test data
+         │     │    for locale {locale}. Parameters: {name, description, originalValue}..."
+         │     ├── Sends to GPT-4o-mini
+         │     ├── Receives: { user_name: "Müller", group_name: "Freunde", ... }
+         │     └── Caches response (keyed by template hash + locale)
+         │
+         ▼
+   Writes per locale: locales/de.json, locales/fr.json, ...
+         → LocaleData { locale, parameters: Record<string,string>, translations: {} }
+   (translations field populated separately by `aperture translations generate`)
+```
+
+#### 4. Replay Flow
+
+```
+CLI: `aperture run onboarding --locales all`
+         │
+         ▼
+   Reads: templates/onboarding.json, locales/*.json, cache/<template>/*.json
+         │
+         ▼
+   For each locale (sequential):
+     │
+     ├── LocaleManager.switchLocale(device, locale)
+     │     ├── Writes locale + language to Simulator GlobalPreferences.plist
+     │     ├── Shuts down Simulator: xcrun simctl shutdown <udid>
+     │     ├── Boots Simulator: xcrun simctl boot <udid>
+     │     └── Polls until Simulator reports "Booted" state (max 30s)
+     │
+     ├── DeviceManager.resetApp(device, bundleId, appPath)
+     │     ├── xcrun simctl uninstall <udid> <bundleId>
+     │     ├── xcrun simctl install <udid> <appPath>
+     │     └── xcrun simctl launch <udid> <bundleId>
+     │
+     ├── Player.replay(template, localeData, cache?)
+     │     │
+     │     ├── For each Step:
+     │     │     ├── Substitute parameter values from localeData
+     │     │     ├── Try cached selector (if available)
+     │     │     ├── Try selector cascade: accessibilityIdentifier → accessibilityLabel → label → xpath
+     │     │     ├── If all fail → AI fallback:
+     │     │     │     ├── Capture current accessibility tree via WDA /source
+     │     │     │     ├── Send to GPT-4o-mini: "Find element matching: {original selector context}"
+     │     │     │     ├── If GPT-4o-mini fails → escalate to GPT-4o
+     │     │     │     └── If GPT-4o fails → StepFailedError
+     │     │     ├── Execute action on resolved element via WDA
+     │     │     ├── Verify post-action state deterministically (accessibility tree diff)
+     │     │     └── Update cache with resolved selector
+     │     │
+     │     ├── At each ScreenshotPoint:
+     │     │     ├── xcrun simctl status_bar override (hide status bar)
+     │     │     ├── xcrun simctl io booted screenshot → PNG buffer
+     │     │     └── Save to output/<template>/<locale>/screenshot-<label>.png
+     │     │
+     │     └── Returns PlaybackResult { locale, steps: StepResult[], screenshots: string[] }
+     │
+     └── Write updated cache: cache/<template>/<locale>.json
+         │
+         ▼
+   Summary report: success/fail per locale, AI fallback count, total time
+```
+
+#### 5. Export Flow
+
+```
+CLI: `aperture export onboarding --style modern`
+         │
+         ▼
+   Reads: output/<template>/<locale>/screenshot-*.png     (raw screenshots)
+   Reads: templates/styles/modern.json                     (template style definition)
+   Reads: translations/<locale>.json                       (localized marketing copy)
+   Reads: templates/assets/frames/<device>.svg             (device frames)
+         │
+         ▼
+   TemplateEngine.export(screenshots, style, translations, targetSizes)
+         │
+         ├── For each locale × each screenshot × each target size:
+         │     ├── Create background layer (gradient/solid/pattern per style)
+         │     ├── Resize screenshot to fit within device frame bounds
+         │     ├── Composite device frame SVG → PNG overlay
+         │     ├── Render text overlay:
+         │     │     ├── Title from translations[locale][screenshotLabel]
+         │     │     ├── Font, size, color, position from style definition
+         │     │     └── Handle long text: auto-shrink font to fit safe area
+         │     ├── Composite all layers via Sharp: background + frame + screenshot + text
+         │     ├── Resize final image to target dimensions (e.g., 1290×2796)
+         │     └── Output as PNG (RGB, no alpha, ≤ 8MB)
+         │
+         ▼
+   Writes: export/<locale>/<device-type>/screenshot-<label>.png
+   Example: export/de/iphone-6.7/screenshot-chat.png
+```
+
+### Module Contracts
+
+#### DeviceManager
+
+- **Inputs:** Simulator UDID (optional), app bundle path, bundle identifier
+- **Outputs:** `SimulatorDevice` object with UDID, WDA session URL, device state
+- **Dependencies:** `xcrun simctl` (system), WebDriverAgent (running on Simulator)
+- **Key methods:**
+  ```typescript
+  listDevices(): Promise<SimulatorDevice[]>
+  // Lists all booted Simulators via `xcrun simctl list devices booted -j`
+
+  connect(udid: string): Promise<SimulatorDevice>
+  // Starts/connects to WDA session on target Simulator, returns device handle
+
+  installApp(device: SimulatorDevice, appPath: string): Promise<string>
+  // Installs .app/.ipa on Simulator, returns resolved bundleId
+
+  resetApp(device: SimulatorDevice, bundleId: string, appPath: string): Promise<void>
+  // Uninstalls, reinstalls, and launches app (clean state)
+  ```
+
+#### Recorder
+
+- **Inputs:** Connected `SimulatorDevice`, recording name
+- **Outputs:** `Recording` JSON written to `recordings/<name>.json`
+- **Dependencies:** DeviceManager (for device handle), WebDriverAgent (for event stream + accessibility tree)
+- **Key methods:**
+  ```typescript
+  startSession(device: SimulatorDevice, name: string): Promise<RecordingSession>
+  // Begins capturing actions from WDA event stream; returns session handle
+
+  markScreenshot(session: RecordingSession, label: string): void
+  // Marks current state as a screenshot capture point
+
+  stopSession(session: RecordingSession): Promise<Recording>
+  // Validates ≥ 1 screenshot point, writes JSON, returns Recording object
+  ```
+
+#### Player
+
+- **Inputs:** `Template` (or `Recording`), `LocaleData` (optional), cached selectors (optional)
+- **Outputs:** `PlaybackResult` with per-step status, captured screenshot paths, updated cache
+- **Dependencies:** DeviceManager (WDA commands), `utils/ai-client` (for AI fallback), `utils/retry`
+- **Key methods:**
+  ```typescript
+  replay(template: Template, localeData?: LocaleData, cache?: SelectorCache): Promise<PlaybackResult>
+  // Replays all steps with selector cascade + AI fallback; captures screenshots at marked points
+
+  replayStep(step: Step, device: SimulatorDevice, retries: number): Promise<StepResult>
+  // Executes a single step: resolve selector → perform action → verify → return result
+
+  resolveElement(step: Step, device: SimulatorDevice): Promise<ResolvedSelector>
+  // Selector cascade: cached → accessibilityIdentifier → accessibilityLabel → label → xpath → AI fallback
+  ```
+
+#### Parameterizer
+
+- **Inputs:** `Recording` with typed text steps
+- **Outputs:** `Template` (recording + parameter definitions)
+- **Dependencies:** `utils/ai-client` (GPT-4o-mini)
+- **Key methods:**
+  ```typescript
+  analyze(recording: Recording): Promise<ParameterSuggestion[]>
+  // Sends text-input steps to GPT-4o-mini, returns suggested parameters
+
+  confirmWithUser(suggestions: ParameterSuggestion[]): Promise<Parameter[]>
+  // Interactive CLI prompt: user accepts/edits/rejects each suggestion
+
+  createTemplate(recording: Recording, parameters: Parameter[]): Template
+  // Merges confirmed parameters into recording to produce Template
+  ```
+
+#### LocaleManager
+
+- **Inputs:** `SimulatorDevice`, target locale string (e.g., `"de_DE"`)
+- **Outputs:** Simulator rebooted in new locale, ready for app launch
+- **Dependencies:** DeviceManager (for shutdown/boot), `xcrun simctl`, `plutil`
+- **Key methods:**
+  ```typescript
+  switchLocale(device: SimulatorDevice, locale: string): Promise<void>
+  // Writes locale to GlobalPreferences.plist, reboots Simulator, waits until ready
+
+  getCurrentLocale(device: SimulatorDevice): Promise<string>
+  // Reads current locale from Simulator plist
+
+  validateLocale(locale: string): boolean
+  // Checks if locale string is valid iOS locale identifier
+  ```
+
+#### TemplateEngine
+
+- **Inputs:** Raw screenshot PNGs, template style definition, translations, target export sizes
+- **Outputs:** Composited store-ready PNG files
+- **Dependencies:** `sharp` (image processing), template style JSONs, asset files (frames, fonts, backgrounds)
+- **Key methods:**
+  ```typescript
+  composite(screenshotPath: string, style: TemplateStyle, text: string, targetSize: ExportSize): Promise<Buffer>
+  // Composites one screenshot with template layers, returns PNG buffer
+
+  exportAll(config: ExportConfig): Promise<ExportResult>
+  // Batch export: all locales × all screenshots × all target sizes → writes to export/ directory
+
+  listStyles(): TemplateStyle[]
+  // Returns available built-in template styles
+  ```
+
+#### TranslationService
+
+- **Inputs:** Source text (English marketing copy), target locales, parameters with descriptions
+- **Outputs:** Translated text per locale, locale-specific test data
+- **Dependencies:** `utils/ai-client` (GPT-4o-mini), file system for cache
+- **Key methods:**
+  ```typescript
+  generateLocaleData(parameters: Parameter[], locales: string[]): Promise<Map<string, LocaleData>>
+  // Generates culturally appropriate test data for each locale via GPT-4o-mini
+
+  translateCopy(baseCopy: Record<string, string>, locales: string[]): Promise<Map<string, Record<string, string>>>
+  // Translates marketing copy for all screenshot labels × all locales
+
+  getCached(templateHash: string, locale: string): LocaleData | null
+  // Returns cached locale data if template hasn't changed; null forces regeneration
+  ```
+
+### Self-Hosted Multi-Tenant Architecture (Future: post-M1)
+
+> **This section describes the planned post-MVP architecture. M1 does not implement any of this, but the M1 module boundaries and data flow are designed to not block this evolution.**
+
+```
+                          ┌─────────────────┐
+  Client A (API key) ───▶ │                 │
+  Client B (API key) ───▶ │  API Server     │──▶ BullMQ Job Queue ──▶ Redis
+  Client C (API key) ───▶ │  (Fastify)      │
+                          └─────────────────┘
+                                                       │
+                                                       ▼
+                                              ┌─────────────────┐
+                                              │  Pipeline Worker │ (×3-4 concurrent)
+                                              │                 │
+                                              │  1. Checkout Simulator from pool
+                                              │  2. Create isolated workspace
+                                              │  3. Run pipeline (same code as CLI)
+                                              │  4. Upload results to storage
+                                              │  5. Return Simulator to pool
+                                              │  6. Fire webhook / update status
+                                              └─────────────────┘
+                                                       │
+                                              ┌────────┴────────┐
+                                              │ Simulator Pool   │
+                                              │ (pre-booted ×4)  │
+                                              │ checkout/checkin  │
+                                              └─────────────────┘
+```
+
+**Components:**
+
+- **API Server (Fastify):** REST API wrapping the CLI pipeline. Endpoints: `POST /jobs` (submit pipeline run), `GET /jobs/:id` (poll status), `GET /jobs/:id/results` (download exports). Validates API key from `Authorization` header against a simple key→client mapping in config/Redis.
+
+- **Job Queue (BullMQ + Redis):** Each API request creates a BullMQ job with: client ID, template config, locales, app bundle reference. Jobs are prioritized FIFO per client. Redis stores job state, progress, and results metadata.
+
+- **Simulator Pool Manager (`src/queue/pool/simulator-pool.ts`):** Pre-boots N Simulators at server startup (N = 3–4 for M4 Pro with 12+ cores and 24+ GB RAM). Each Simulator has a unique UDID and is tracked as `idle` | `in-use`. Workers call `pool.checkout()` to get an idle Simulator and `pool.checkin(udid)` to return it. If all Simulators are busy, the job waits in queue. Health check pings each idle Simulator periodically; unresponsive ones are rebooted.
+
+- **Workspace Isolation:** Each job gets a temporary working directory (`/tmp/aperture-jobs/<jobId>/`) containing its own `recordings/`, `templates/`, `locales/`, `output/`, `export/` directories. The pipeline modules already operate on paths from config — the job worker just overrides the base path. Cleanup happens after result upload (or after configurable TTL).
+
+- **Concurrency Model:** 3–4 parallel pipeline workers on M4 Pro. Each worker holds one Simulator. Locale switches within a job are sequential (Simulator reboot required). Multiple jobs run truly in parallel on separate Simulators.
+
+- **Authentication:** Simple API key scheme. Config file maps API keys to client IDs. Rate limiting per client (e.g., 10 jobs/hour). No user accounts, no OAuth — just static keys for trusted clients.
+
+- **Job Status & Webhooks:** Clients poll `GET /jobs/:id` for status (`queued` → `running` → `completed` | `failed`). Optionally, clients provide a `webhookUrl` at job submission — server POSTs status updates to it. Job results (exported PNGs) are served via signed temporary URLs or direct download.
+
+**Why this doesn't block M1:** The M1 CLI modules (`Player`, `DeviceManager`, `TemplateEngine`, etc.) take explicit config/paths as inputs — they don't assume global state or singleton Simulators. The `src/queue/` directory exists in the project structure but remains empty stubs until post-M1 implementation.
+
+### Error Handling Strategy
+
+**Structured Error Types:**
+
+```typescript
+// Base error — all Aperture errors extend this
+class ApertureError extends Error {
+  code: string;          // Machine-readable: "DEVICE_NOT_FOUND", "STEP_FAILED", etc.
+  context: object;       // Structured metadata for debugging
+}
+
+class DeviceError extends ApertureError {
+  // code: "DEVICE_NOT_FOUND" | "DEVICE_BOOT_TIMEOUT" | "WDA_CONNECTION_FAILED"
+  // context: { udid, timeout, lastState }
+}
+
+class StepFailedError extends ApertureError {
+  // code: "SELECTOR_NOT_FOUND" | "AI_FALLBACK_FAILED" | "STEP_TIMEOUT" | "VERIFICATION_FAILED"
+  // context: { stepIndex, action, selectorAttempted, accessibilityTree, aiResponse? }
+}
+
+class AIFallbackError extends ApertureError {
+  // code: "AI_MINI_FAILED" | "AI_FULL_FAILED" | "AI_RATE_LIMITED"
+  // context: { model, prompt, response, tokensUsed }
+}
+
+class LocaleError extends ApertureError {
+  // code: "LOCALE_SWITCH_FAILED" | "LOCALE_UNSUPPORTED" | "PLIST_WRITE_FAILED"
+  // context: { locale, device, plistPath }
+}
+
+class ExportError extends ApertureError {
+  // code: "TEMPLATE_RENDER_FAILED" | "ASSET_NOT_FOUND" | "IMAGE_TOO_LARGE"
+  // context: { style, screenshotPath, targetSize }
+}
+```
+
+**Per-Step Retry Logic (Player):**
+
+1. **Selector cascade** (no retry needed — sequential fallback): cached → accessibilityIdentifier → accessibilityLabel → label → xpath
+2. **If entire cascade fails**, retry the step up to `config.stepRetries` times (default: 2) with a 1-second delay — UI may still be animating
+3. **If retries exhausted**, escalate to AI fallback:
+   - First attempt: GPT-4o-mini (fast, cheap)
+   - If GPT-4o-mini returns no match or wrong element: GPT-4o (more capable)
+   - If GPT-4o fails: `StepFailedError` with full diagnostic context
+4. **Step timeout**: each step has `config.stepTimeout` (default 10s). If element not found within timeout, skip directly to AI fallback
+
+**Run-Level Isolation:**
+
+- Each locale runs independently. A failed locale logs the error and continues to the next locale
+- Failed locales are reported in the summary but do not block successful ones
+- The run exits with code 0 if ≥ 1 locale succeeds, code 1 if all fail
+
+**Logging:**
+
+- All errors logged via structured logger (pino) with:
+  - `stepIndex`: which step failed
+  - `action`: what was being attempted
+  - `selectorAttempted`: the selector chain that was tried
+  - `accessibilityTree`: full tree at time of failure (truncated to relevant subtree)
+  - `aiResponse`: if AI fallback was used, the model's response
+  - `duration`: how long the step took before failing
+- Log levels: `debug` (every selector attempt), `info` (step success), `warn` (AI fallback used), `error` (step/run failed)
+- Logs written to both stderr (for CLI) and `logs/<run-id>.json` (structured, for programmatic analysis)
+
 ### Key Technical Decisions
 - **WebDriverAgent / Appium XCUITest driver over raw XCTest**: Better programmatic control, mature Node.js client via WebDriverIO, full access to iOS accessibility hierarchy. Facebook's WebDriverAgent provides the bridge between HTTP commands and XCUITest framework.
 - **`xcrun simctl` as the device management layer**: Native Apple tooling for Simulator lifecycle (boot, shutdown, install, uninstall, locale changes, status bar overrides, screenshots). No third-party dependency needed for device management.
