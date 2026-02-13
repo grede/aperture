@@ -437,3 +437,6 @@ interface LocaleData {
 | OQ-8 | License model for device frame assets — create our own or use existing open-source frames? | Legal / Design | Design |
 | OQ-9 | Do we need analytics/telemetry in CLI for usage insights, and if so, how to handle privacy? | Growth | Product |
 | OQ-10 | How to handle apps that use SwiftUI previews vs UIKit — does the accessibility tree differ significantly? | Selector reliability | Engineering |
+| OQ-11 | Self-hosted multi-tenancy: how to isolate working directories and Simulator instances between concurrent client runs on a single Mac Mini? | Scalability / M2+ | Engineering |
+| OQ-12 | Task queue architecture (BullMQ/Redis vs simpler alternative) for scheduling and prioritizing concurrent pipeline runs? | Scalability / M2+ | Engineering |
+| OQ-13 | Simulator pool management: pre-boot a pool of Simulators vs boot-on-demand? What's the optimal pool size for M4 Pro (12-14 cores, 24-48GB RAM)? | Performance / Scalability | Engineering |
