@@ -32,8 +32,8 @@ program
 // Devices command
 program
   .command('devices')
-  .description('List available iOS Simulators')
-  .option('--booted', 'Show only booted devices')
+  .description('List available iOS Simulators (booted only by default)')
+  .option('--all', 'Show all devices, not just booted ones')
   .option('--json', 'Output as JSON')
   .action(devicesCommand);
 
