@@ -95,13 +95,25 @@ Aperture solves this by letting users **record one walkthrough** on a local iOS 
 - [ ] User can opt out of data clearing via `--no-reset` flag
 - [ ] Custom setup commands can be defined in config (e.g., pre-seed database via simctl keychain, push notification, etc.)
 
-#### US-008: Project Configuration File
-**Description:** As a developer, I want a project config file that stores all settings so I don't re-enter them every run.
+#### US-008: Interactive Setup Wizard + Project Configuration
+**Description:** As a developer, I want an interactive setup wizard that guides me through project configuration step by step, with sensible defaults, so I can get started quickly without reading docs.
 **Acceptance Criteria:**
-- [ ] `aperture init` creates `aperture.config.json` in current directory
-- [ ] Config stores: bundle identifier, .app path, default Simulator UDID, locales list, template choice, output directory
-- [ ] All CLI flags can be overridden via config file
+- [ ] `aperture init` launches an interactive wizard (using `inquirer` or `prompts`) that collects config step-by-step:
+  1. **App path** — prompt for .app/.ipa path, validate it exists, auto-detect bundle ID
+  2. **Target locales** — multi-select from common locales (en, de, fr, es, ja, ko, zh, pt, ru, ...) with "Select all" option; default: `["en"]`
+  3. **Simulator** — auto-detect available Simulators via `simctl list`, let user pick; default: latest iPhone
+  4. **Template style** — pick from 5 built-in styles with preview descriptions; default: `modern`
+  5. **Output directory** — default: `./output`
+  6. **Safety guardrails** — max steps (default: 50), step timeout (default: 10s), run timeout (default: 5min)
+  7. **Confirmation** — show summary of all choices, confirm or go back to edit
+- [ ] Each step shows a sensible default that can be accepted with Enter
+- [ ] `aperture init --yes` skips wizard and uses all defaults (non-interactive mode for CI)
+- [ ] Result saved as `aperture.config.json` in current directory
+- [ ] `locales` is a required field in config — wizard enforces at least one locale selected
 - [ ] Config file is validated on load with clear error messages for invalid fields
+- [ ] All CLI flags can override config file values
+- [ ] `aperture config edit` re-launches the wizard with current values pre-filled for easy updates
+- [ ] `aperture locales add <locale,...>` and `aperture locales remove <locale,...>` for quick locale management without re-running wizard
 
 ### Milestone 2 — AI Parameterization + Localization
 
@@ -118,9 +130,11 @@ Aperture solves this by letting users **record one walkthrough** on a local iOS 
 **Description:** As a developer, I want to provide locale-specific values for parameters (e.g., German names for `de` locale) so screenshots look authentic.
 **Acceptance Criteria:**
 - [ ] File `locales/<locale>.json` stores parameter values per locale
-- [ ] CLI command `aperture locales generate` uses GPT-4o-mini to generate culturally appropriate test data for all configured locales
+- [ ] CLI command `aperture locales generate` reads the list of target locales from `aperture.config.json` (configured during `aperture init` wizard, see US-008)
+- [ ] GPT-4o-mini generates culturally appropriate test data for each parameter × each configured locale
 - [ ] Generated data is saved as editable JSON — user can manually override any value
-- [ ] LLM-generated values are cached; regeneration only on explicit request
+- [ ] LLM-generated values are cached; regeneration only on explicit request or `--force` flag
+- [ ] Adding new locales via `aperture locales add` and re-running `generate` only generates data for newly added locales (existing data preserved)
 
 #### US-011: Change Simulator Locale Programmatically
 **Description:** As a developer, I want the tool to switch the iOS Simulator's locale automatically so my app renders in the target language.
