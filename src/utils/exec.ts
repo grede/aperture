@@ -29,7 +29,7 @@ export interface ExecOptions {
 
 /**
  * Execute a command with proper error handling
- * Uses execFile (not exec) to prevent shell injection vulnerabilities
+ * Uses execFile (not exec/shell) to prevent shell injection vulnerabilities
  */
 export async function exec(
   command: string,

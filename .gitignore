@@ -51,6 +51,11 @@ Thumbs.db
 aperture.config.json
 !aperture.config.example.json
 
+# Test projects and app bundles
+test_project/
+*.ipa
+*.app
+
 # Firebase
 firebase-debug.log
 .firebase/

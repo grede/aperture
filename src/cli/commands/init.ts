@@ -371,25 +371,18 @@ async function runWizard(appPath?: string): Promise<ApertureConfigSchema> {
 }
 
 /**
- * Get bundle ID from app path
+ * Get bundle ID from app path (.app or .ipa)
  */
 async function getBundleId(appPath: string): Promise<string> {
-  // For .ipa files, we'd need to extract first
-  if (appPath.endsWith('.ipa')) {
-    warning('IPA bundle ID detection not yet implemented, will be detected during install');
-    return 'com.example.app'; // Placeholder
-  }
-
   try {
-    const appInfo = await deviceManager.installApp('temp', appPath).catch(() => null);
-    if (appInfo) {
-      return appInfo.bundleId;
-    }
-  } catch {
-    // Fall back to placeholder
+    // Use deviceManager's getBundleId which handles both .app and .ipa files
+    const bundleId = await deviceManager.getBundleId(appPath);
+    return bundleId;
+  } catch (err) {
+    // If extraction fails, fall back to placeholder
+    warning(`Failed to extract bundle ID from ${appPath}: ${(err as Error).message}`);
+    return 'com.example.app';
   }
-
-  return 'com.example.app';
 }
 
 /**

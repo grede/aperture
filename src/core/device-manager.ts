@@ -9,7 +9,7 @@ import {
   type SimctlDeviceList,
   DeviceError,
 } from '../types/index.js';
-import { simctl, xcrun } from '../utils/exec.js';
+import { simctl, xcrun, exec } from '../utils/exec.js';
 import { retryUntil, sleep } from '../utils/retry.js';
 import { logger } from '../utils/logger.js';
 
@@ -214,8 +214,8 @@ export class DeviceManager {
       actualAppPath = await this.extractIpaBundle(appPath);
     }
 
-    // Get bundle ID
-    const bundleId = await this.getBundleId(actualAppPath);
+    // Get bundle ID from the .app bundle
+    const bundleId = await this.readBundleIdFromApp(actualAppPath);
 
     // Install the app
     const result = await simctl(['install', udid, actualAppPath]);
@@ -308,14 +308,14 @@ export class DeviceManager {
   /**
    * Extract .app bundle from .ipa file
    */
-  private async extractIpaBundle(ipaPath: string): Promise<string> {
+  async extractIpaBundle(ipaPath: string): Promise<string> {
     logger.debug({ ipaPath }, 'Extracting .app from .ipa');
 
     const tmpDir = `/tmp/aperture-ipa-${Date.now()}`;
     await fs.mkdir(tmpDir, { recursive: true });
 
-    // Unzip IPA
-    const result = await xcrun(['unzip', '-q', ipaPath, '-d', tmpDir]);
+    // Unzip IPA (use exec, not xcrun - unzip is a standard Unix command)
+    const result = await exec('unzip', ['-q', ipaPath, '-d', tmpDir]);
 
     if (result.exitCode !== 0) {
       throw new DeviceError('Failed to extract IPA', 'APP_INSTALL_FAILED', {
@@ -339,9 +339,24 @@ export class DeviceManager {
   }
 
   /**
-   * Get bundle ID from .app bundle
+   * Get bundle ID from .app bundle or .ipa file
+   * For .ipa files, extracts the .app first then reads bundle ID
    */
-  private async getBundleId(appPath: string): Promise<string> {
+  async getBundleId(appPath: string): Promise<string> {
+    let actualAppPath = appPath;
+
+    // Handle .ipa files - extract the .app bundle first
+    if (appPath.endsWith('.ipa')) {
+      actualAppPath = await this.extractIpaBundle(appPath);
+    }
+
+    return this.readBundleIdFromApp(actualAppPath);
+  }
+
+  /**
+   * Read bundle ID from .app bundle Info.plist
+   */
+  private async readBundleIdFromApp(appPath: string): Promise<string> {
     const infoPlistPath = path.join(appPath, 'Info.plist');
 
     const result = await xcrun([
