@@ -3,6 +3,8 @@
 import { Command } from 'commander';
 import { initCommand } from './commands/init.js';
 import { devicesCommand } from './commands/devices.js';
+import { recordCommand } from './commands/record.js';
+import { playCommand } from './commands/play.js';
 
 const program = new Command();
 
@@ -27,22 +29,22 @@ program
   .option('--json', 'Output as JSON')
   .action(devicesCommand);
 
-// Record command (placeholder)
+// Record command
 program
   .command('record')
   .description('Start recording a walkthrough')
   .option('--name <name>', 'Recording name')
-  .action(() => {
-    console.log('Recording feature coming soon (US-003)');
-  });
+  .option('--device <udid>', 'Simulator UDID')
+  .action(recordCommand);
 
-// Play command (placeholder)
+// Play command
 program
   .command('play <recording>')
   .description('Replay a recording')
-  .action((recording) => {
-    console.log(`Playing recording: ${recording} (coming soon - US-005)`);
-  });
+  .option('--device <udid>', 'Simulator UDID')
+  .option('--locale <locale>', 'Locale code (e.g., en, de, fr)')
+  .option('--output-dir <dir>', 'Output directory for screenshots')
+  .action(playCommand);
 
 // Run command (placeholder)
 program
