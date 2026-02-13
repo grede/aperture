@@ -10,9 +10,9 @@ Indie developers and small teams manually capture screenshots for every language
 
 ## The Solution
 
-Aperture lets you **record one walkthrough** on a local Android emulator, then **automatically replays** it for every locale. The AI agent handles test data, navigation, screenshots, design templates, and localized marketing copy — exporting store-ready assets.
+Aperture lets you **record one walkthrough** on a local iOS Simulator, then **automatically replays** it for every locale. The AI agent handles test data, navigation, screenshots, design templates, and localized marketing copy — exporting store-ready assets.
 
-**No code required.** Unlike Fastlane snapshot (requires XCUITest), Aperture uses an accessibility-tree-first approach with AI fallback — just click through your app once.
+**No XCUITest code required.** Unlike Fastlane snapshot (requires XCUITest scripts), Aperture uses an accessibility-tree-first approach with AI fallback — just click through your app once.
 
 ## How It Works
 
@@ -27,7 +27,7 @@ Aperture lets you **record one walkthrough** on a local Android emulator, then *
 
 ```bash
 # Initialize project
-aperture init --apk ./myapp.apk
+aperture init --app ./MyApp.app
 
 # Record a walkthrough
 aperture record
@@ -42,23 +42,23 @@ aperture export my-recording --style modern
 
 ## Features
 
-- 🎬 **Record & Replay** — Deterministic playback via accessibility tree selectors
+- 🎬 **Record & Replay** — Deterministic playback via iOS accessibility tree selectors
 - 🌍 **30+ Languages** — Automatic locale switching, AI-generated test data & marketing copy
 - 🤖 **AI Fallback** — GPT-4o-mini resolves UI elements when selectors break
 - 🎨 **5 Built-in Templates** — `minimal` · `modern` · `gradient` · `dark` · `playful`
-- 📱 **Store-Ready Export** — Google Play dimensions, device frames, localized text overlays
-- 🖥️ **Web Recorder** — Browser-based recording with live emulator preview
+- 📱 **Store-Ready Export** — App Store dimensions (6.7", 6.5", 5.5" + iPad), device frames, localized text overlays
+- 🖥️ **Web Recorder** — Browser-based recording with live Simulator preview
 - ⚡ **Cached Runs** — Successful AI resolutions are cached for instant reruns
 
 ## Architecture
 
 ```
 CLI (Commander.js)
-  ├── DeviceManager      — ADB + Appium/UIAutomator2
-  ├── Recorder           — Action capture + accessibility tree
+  ├── DeviceManager      — xcrun simctl + WebDriverAgent
+  ├── Recorder           — Action capture + iOS accessibility tree
   ├── Player             — Deterministic replay + AI fallback
   ├── Parameterizer      — GPT-4o-mini text input analysis
-  ├── LocaleManager      — Device locale switching
+  ├── LocaleManager      — Simulator locale switching via plist
   ├── TemplateEngine     — Sharp image compositing
   ├── TranslationService — Localized copy generation + cache
   └── WebServer          — Express + WebSocket for web UI
@@ -67,19 +67,20 @@ CLI (Commander.js)
 ## Tech Stack
 
 - **Runtime:** Node.js + TypeScript
-- **Emulator Control:** Appium + WebDriverIO (UIAutomator2)
+- **Simulator Control:** Appium XCUITest driver + WebDriverAgent + `xcrun simctl`
 - **Image Processing:** Sharp
 - **AI:** OpenAI GPT-4o-mini (parameterization, translations, element fallback)
-- **Web UI:** Express + WebSocket + scrcpy mirroring
+- **Web UI:** Express + WebSocket + Simulator mirroring
 - **CLI:** Commander.js
 
 ## Roadmap
 
 | Milestone | Scope | Timeline |
 |-----------|-------|----------|
-| **M1** | Core recording + playback (CLI, Android) | 4 weeks |
+| **M1** | Core recording + playback (CLI, iOS Simulator) | 4 weeks |
 | **M2** | AI parameterization + localization | 8 weeks |
 | **M3** | Templates + export + web UI | 12 weeks |
+| **v2** | Android support, cloud execution, CI/CD | Post-MVP |
 
 ## Docs
 
