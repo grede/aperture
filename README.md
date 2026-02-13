@@ -26,16 +26,24 @@ Aperture lets you **record one walkthrough** on a local iOS Simulator, then **au
 ## Quick Start
 
 ```bash
-# Initialize project
-aperture init --app ./MyApp.app
+# Install globally
+npm install -g aperture
 
-# Record a walkthrough
+# Or for development
+npm install
+npm run build
+npm link
+
+# Initialize project with interactive wizard
+aperture init
+
+# Record a walkthrough (coming soon - US-003)
 aperture record
 
-# Generate locale data for 5 languages
+# Generate locale data for 5 languages (coming soon - US-010)
 aperture locales generate --locales en,de,fr,ja,ko
 
-# Run across all locales and export
+# Run across all locales and export (coming soon - US-014, US-017)
 aperture run my-recording --locales all
 aperture export my-recording --style modern
 ```
