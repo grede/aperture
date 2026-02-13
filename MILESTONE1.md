@@ -371,6 +371,46 @@ All 8 user stories implemented:
 
 ---
 
+## ✨ Quality of Life Enhancements
+
+### US-023: Automated Appium Server Management ✅
+**Implementation:** `src/core/appium-manager.ts`, `src/cli/commands/server.ts`
+
+Automatic Appium lifecycle management eliminates manual setup:
+- Auto-detection of Appium installation
+- Automatic installation (local via npm)
+- Background server management with state persistence
+- Health checks and auto-recovery (3 retries with backoff)
+- Port conflict resolution (8100-8110)
+- Manual control commands
+
+**CLI Commands:**
+```bash
+aperture server start [--port <port>]   # Start Appium
+aperture server stop                     # Stop Appium
+aperture server restart                  # Restart Appium
+aperture server status                   # Show status
+aperture server logs [-n <lines>]        # View logs
+aperture server install                  # Install manually
+
+# Record and play now auto-manage Appium
+aperture record                          # Auto-starts Appium if needed
+aperture play my-recording               # Auto-starts Appium if needed
+
+# Disable auto-management for manual control
+aperture record --no-auto-appium
+aperture play my-recording --no-auto-appium
+```
+
+**Features:**
+- Detached process management (server runs independently)
+- State persistence in `.aperture/appium.state`
+- Comprehensive logging to `logs/appium-<timestamp>.log`
+- HTTP health checks to `/status` endpoint
+- Graceful degradation with manual recovery instructions
+
+---
+
 ## 🚀 Next: Milestone 2
 
 Ready to implement:

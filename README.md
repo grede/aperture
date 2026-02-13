@@ -37,8 +37,12 @@ npm link
 # Initialize project with interactive wizard
 aperture init
 
-# Record a walkthrough (coming soon - US-003)
+# Record a walkthrough
+# Appium will be installed and started automatically!
 aperture record
+
+# Replay and capture screenshots
+aperture play my-recording
 
 # Generate locale data for 5 languages (coming soon - US-010)
 aperture locales generate --locales en,de,fr,ja,ko
@@ -46,6 +50,16 @@ aperture locales generate --locales en,de,fr,ja,ko
 # Run across all locales and export (coming soon - US-014, US-017)
 aperture run my-recording --locales all
 aperture export my-recording --style modern
+```
+
+**Automatic Appium Management** — Aperture automatically installs, starts, and manages Appium server for you. No manual setup required! 🎉
+
+For manual control:
+```bash
+aperture server start    # Start Appium manually
+aperture server stop     # Stop Appium
+aperture server status   # Check status
+aperture server logs     # View logs
 ```
 
 ## Features
@@ -62,6 +76,7 @@ aperture export my-recording --style modern
 
 ```
 CLI (Commander.js)
+  ├── AppiumManager      — Automatic Appium server lifecycle management
   ├── DeviceManager      — xcrun simctl + WebDriverAgent
   ├── Recorder           — Action capture + iOS accessibility tree
   ├── Player             — Deterministic replay + AI fallback

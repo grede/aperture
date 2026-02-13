@@ -4,6 +4,7 @@ import { connectToWDA } from '../../core/wda-connection.js';
 import { Recorder } from '../../core/recorder.js';
 import { loadConfig } from '../../config/index.js';
 import { logger } from '../../utils/logger.js';
+import { appiumManager } from '../../core/appium-manager.js';
 import { success, error, warning, header, info, createSpinner } from '../ui.js';
 
 /**
@@ -12,6 +13,8 @@ import { success, error, warning, header, info, createSpinner } from '../ui.js';
 export interface RecordOptions {
   name?: string;
   device?: string;
+  noAutoAppium?: boolean;
+  appiumPort?: string;
 }
 
 /**
@@ -101,26 +104,71 @@ export async function recordCommand(options: RecordOptions = {}) {
     await deviceManager.launchApp(device.udid, config.app.bundleId);
     launchSpinner.succeed('App launched');
 
-    // Show WebDriverAgent setup instructions
-    console.log();
-    warning('WebDriverAgent Setup Required');
-    console.log();
-    console.log('Before recording, start Appium server in a separate terminal:');
-    console.log();
-    console.log('  1. Install Appium: npm install -g appium');
-    console.log('  2. Install XCUITest driver: appium driver install xcuitest');
-    console.log('  3. Start server: appium --port 8100');
-    console.log();
-    console.log('Once Appium is running, press Enter to continue...');
+    // Automatic Appium management (US-023)
+    if (!options.noAutoAppium) {
+      // Check if Appium is installed
+      if (!(await appiumManager.isInstalled())) {
+        console.log();
+        warning('Appium is required for recording but not installed.');
+        console.log();
+        console.log('Appium is an automation framework for iOS apps.');
+        console.log('Aperture can install it automatically.');
+        console.log();
 
-    await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'ready',
-        message: 'Is Appium server running?',
-        default: false,
-      },
-    ]);
+        const { shouldInstall } = await inquirer.prompt<{ shouldInstall: boolean }>([
+          {
+            type: 'confirm',
+            name: 'shouldInstall',
+            message: 'Install Appium automatically?',
+            default: true,
+          },
+        ]);
+
+        if (shouldInstall) {
+          const installSpinner = createSpinner('Installing Appium...').start();
+          try {
+            await appiumManager.install((message) => {
+              installSpinner.text = message;
+            });
+            installSpinner.succeed('Appium installed');
+          } catch (err) {
+            installSpinner.fail('Failed to install Appium');
+            console.log();
+            console.log('Manual installation:');
+            console.log('  npm install --save-dev appium');
+            console.log('  npx appium driver install xcuitest');
+            console.log();
+            process.exit(1);
+          }
+        } else {
+          console.log();
+          console.log('Manual installation required:');
+          console.log('  npm install --save-dev appium');
+          console.log('  npx appium driver install xcuitest');
+          console.log();
+          process.exit(1);
+        }
+      }
+
+      // Ensure Appium server is running and healthy
+      const port = options.appiumPort ? parseInt(options.appiumPort, 10) : undefined;
+      const serverSpinner = createSpinner('Checking Appium server...').start();
+      try {
+        const processInfo = await appiumManager.ensureHealthy(port);
+        serverSpinner.succeed(`Appium server running on port ${processInfo.port}`);
+        info(`View logs: aperture server logs`);
+      } catch (err) {
+        serverSpinner.fail('Failed to start Appium server');
+        logger.error('Appium start failed', { error: err });
+        console.log();
+        console.log('Manual recovery:');
+        console.log('  1. Check logs: aperture server logs');
+        console.log('  2. Try manual start: aperture server start');
+        console.log('  3. Or use --no-auto-appium and start Appium manually');
+        console.log();
+        process.exit(1);
+      }
+    }
 
     // Connect to WebDriverAgent
     const wdaSpinner = createSpinner('Connecting to WebDriverAgent...').start();

@@ -4,6 +4,7 @@ import { Recorder } from '../../core/recorder.js';
 import { Player } from '../../core/player.js';
 import { loadConfig } from '../../config/index.js';
 import { logger } from '../../utils/logger.js';
+import { appiumManager } from '../../core/appium-manager.js';
 import { success, error, header, info, createSpinner } from '../ui.js';
 
 /**
@@ -13,6 +14,8 @@ export interface PlayOptions {
   device?: string;
   locale?: string;
   outputDir?: string;
+  noAutoAppium?: boolean;
+  appiumPort?: string;
 }
 
 /**
@@ -51,6 +54,33 @@ export async function playCommand(recordingName: string, options: PlayOptions = 
     const resetSpinner = createSpinner('Resetting app state...').start();
     await deviceManager.resetApp(device.udid, recording.bundleId, config.app.path);
     resetSpinner.succeed('App reset');
+
+    // Automatic Appium management (US-023)
+    if (!options.noAutoAppium) {
+      // Check if Appium is installed
+      if (!(await appiumManager.isInstalled())) {
+        error('Appium is not installed. Please run: aperture server install');
+        process.exit(1);
+      }
+
+      // Ensure Appium server is running and healthy
+      const port = options.appiumPort ? parseInt(options.appiumPort, 10) : undefined;
+      const serverSpinner = createSpinner('Checking Appium server...').start();
+      try {
+        const processInfo = await appiumManager.ensureHealthy(port);
+        serverSpinner.succeed(`Appium server running on port ${processInfo.port}`);
+      } catch (err) {
+        serverSpinner.fail('Failed to start Appium server');
+        logger.error('Appium start failed', { error: err });
+        console.log();
+        console.log('Manual recovery:');
+        console.log('  1. Check logs: aperture server logs');
+        console.log('  2. Try manual start: aperture server start');
+        console.log('  3. Or use --no-auto-appium and start Appium manually');
+        console.log();
+        process.exit(1);
+      }
+    }
 
     // Connect to WebDriverAgent
     const wdaSpinner = createSpinner('Connecting to WebDriverAgent...').start();

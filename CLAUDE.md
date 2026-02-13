@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Aperture is an AI-powered iOS app store screenshot automation tool. It allows developers to record one walkthrough on an iOS Simulator, then automatically replays it across multiple locales to generate store-ready screenshots in 30+ languages.
 
-**Current Status:** Pre-implementation (documentation phase). No source code has been written yet.
+**Current Status:** Milestone 1 complete + US-023 (Automatic Appium Management) implemented. Core recording/playback functionality is functional.
 
 **Tech Stack:**
 - Runtime: Node.js + TypeScript
@@ -20,12 +20,13 @@ Aperture is an AI-powered iOS app store screenshot automation tool. It allows de
 
 The system is designed as a modular CLI tool with the following core components:
 
-### Core Modules (to be implemented in `src/core/`)
-- **DeviceManager**: Manages iOS Simulator lifecycle via `xcrun simctl` and WebDriverAgent sessions
-- **Recorder**: Captures user actions and iOS accessibility tree during manual walkthroughs
-- **Player**: Replays recordings deterministically with selector cascade and AI fallback
-- **Parameterizer**: Uses GPT-4o-mini to identify and parameterize locale-dependent text inputs
-- **LocaleManager**: Switches Simulator locale via GlobalPreferences.plist manipulation
+### Core Modules (in `src/core/`)
+- **AppiumManager**: ✅ Automatic Appium server lifecycle management with health checks and auto-recovery
+- **DeviceManager**: ✅ Manages iOS Simulator lifecycle via `xcrun simctl` and WebDriverAgent sessions
+- **Recorder**: ✅ Captures user actions and iOS accessibility tree during manual walkthroughs
+- **Player**: ✅ Replays recordings deterministically with selector cascade and AI fallback
+- **Parameterizer**: ⏳ Uses GPT-4o-mini to identify and parameterize locale-dependent text inputs (coming in M2)
+- **LocaleManager**: ⏳ Switches Simulator locale via GlobalPreferences.plist manipulation (coming in M2)
 
 ### Supporting Modules
 - **TemplateEngine** (`src/templates/`): Sharp-based image compositor for device frames and marketing overlays
@@ -276,6 +277,65 @@ System dependencies (must be installed separately):
 
 ### M3 — Templates + Export + Web UI (12 weeks)
 - US-017 to US-022: Template application, translation generation, dual-simulator export, web recorder, template preview, screenshot import
+
+## Automatic Appium Management (US-023)
+
+The AppiumManager handles complete Appium server lifecycle automatically, eliminating the need for users to manually install, start, or manage Appium.
+
+### Key Features
+
+1. **Auto-detection and Installation**
+   - Checks for local (`npx appium`) or global (`appium`) installation
+   - Prompts user to install if missing
+   - Installs Appium locally via `npm install --save-dev appium`
+   - Automatically installs XCUITest driver
+
+2. **Background Server Management**
+   - Starts Appium in detached process mode (runs independently of CLI)
+   - Uses `find-free-port` to avoid port conflicts (default: 8100, fallback: 8101-8110)
+   - Saves server state to `.aperture/appium.state` for session persistence
+   - Logs to `logs/appium-<timestamp>.log`
+
+3. **Health Checks and Auto-Recovery**
+   - HTTP health check to `http://localhost:<port>/status` before critical operations
+   - `ensureHealthy()` method restarts server if unresponsive
+   - Retry logic: 3 attempts with 2s backoff
+   - Graceful fallback to manual mode with clear instructions
+
+4. **Manual Control**
+   - `aperture server start [--port <port>]` - Start server
+   - `aperture server stop` - Stop server
+   - `aperture server restart` - Restart server
+   - `aperture server status` - Show status (running/stopped, port, PID, uptime)
+   - `aperture server logs [-n <lines>]` - View logs
+   - `aperture server install` - Install Appium manually
+
+5. **Integration with Commands**
+   - `aperture record` and `aperture play` automatically call `ensureHealthy()`
+   - `--no-auto-appium` flag disables automatic management
+   - `--appium-port <port>` overrides default port
+
+### Implementation Details
+
+**State Persistence:**
+```json
+{
+  "pid": 12345,
+  "port": 8100,
+  "startTime": "2026-02-13T16:00:00Z",
+  "logFile": "logs/appium-1707840000.log"
+}
+```
+
+**Process Management:**
+- Uses `spawn()` with `detached: true` and `unref()` to run server independently
+- `tree-kill` for proper cleanup with SIGTERM signal
+- Process PID verification with `process.kill(pid, 0)` before health checks
+
+**Dependencies:**
+- `find-free-port` - Port availability checking
+- `tree-kill` - Process tree cleanup
+- `appium` (devDependency) - XCUITest automation
 
 ## Notes for Implementation
 

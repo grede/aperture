@@ -5,6 +5,7 @@ import { initCommand } from './commands/init.js';
 import { devicesCommand } from './commands/devices.js';
 import { recordCommand } from './commands/record.js';
 import { playCommand } from './commands/play.js';
+import { serverCommand } from './commands/server.js';
 
 const program = new Command();
 
@@ -29,12 +30,17 @@ program
   .option('--json', 'Output as JSON')
   .action(devicesCommand);
 
+// Server command
+program.addCommand(serverCommand);
+
 // Record command
 program
   .command('record')
   .description('Start recording a walkthrough')
   .option('--name <name>', 'Recording name')
   .option('--device <udid>', 'Simulator UDID')
+  .option('--no-auto-appium', 'Disable automatic Appium server management')
+  .option('--appium-port <port>', 'Appium server port (default: 8100)')
   .action(recordCommand);
 
 // Play command
@@ -44,6 +50,8 @@ program
   .option('--device <udid>', 'Simulator UDID')
   .option('--locale <locale>', 'Locale code (e.g., en, de, fr)')
   .option('--output-dir <dir>', 'Output directory for screenshots')
+  .option('--no-auto-appium', 'Disable automatic Appium server management')
+  .option('--appium-port <port>', 'Appium server port (default: 8100)')
   .action(playCommand);
 
 // Run command (placeholder)
