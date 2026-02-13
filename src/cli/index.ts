@@ -7,6 +7,7 @@ import { recordCommand } from './commands/record.js';
 import { playCommand } from './commands/play.js';
 import { serverCommand } from './commands/server.js';
 import { parameterizeCommand } from './commands/parameterize.js';
+import { localesCommand } from './commands/locales.js';
 
 const program = new Command();
 
@@ -61,6 +62,9 @@ program
   .description('Analyze recording and create parameterized template (US-009)')
   .option('--force', 'Force re-analysis even if template exists')
   .action(parameterizeCommand);
+
+// Locales command
+program.addCommand(localesCommand);
 
 // Run command (placeholder)
 program
