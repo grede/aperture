@@ -1,5 +1,5 @@
-import { writeFile, access } from 'fs/promises';
-import { resolve } from 'path';
+import { writeFile, access, readdir } from 'fs/promises';
+import { resolve, join, extname, basename } from 'path';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { DeviceManager } from '../../core/device-manager.js';
@@ -10,10 +10,45 @@ interface InitOptions {
   app?: string;
 }
 
+/**
+ * Detect .app and .ipa files in the current directory
+ */
+async function detectAppFiles(): Promise<string[]> {
+  try {
+    const files = await readdir(process.cwd());
+    const appFiles: string[] = [];
+
+    for (const file of files) {
+      const ext = extname(file);
+      if (ext === '.app' || ext === '.ipa') {
+        appFiles.push(file);
+      }
+    }
+
+    return appFiles;
+  } catch (error) {
+    // If we can't read directory, return empty array
+    return [];
+  }
+}
+
 export async function initCommand(options: InitOptions): Promise<void> {
   console.log(chalk.bold.blue('\n🎬 Aperture Setup Wizard\n'));
 
   const deviceManager = new DeviceManager();
+
+  // Detect app files in current directory
+  const detectedApps = await detectAppFiles();
+  let suggestedAppPath = './build/MyApp.app';
+
+  if (detectedApps.length > 0) {
+    suggestedAppPath = `./${detectedApps[0]}`;
+    console.log(chalk.green(`✓ Detected app file: ${chalk.cyan(detectedApps[0])}\n`));
+
+    if (detectedApps.length > 1) {
+      console.log(chalk.dim(`  Also found: ${detectedApps.slice(1).join(', ')}\n`));
+    }
+  }
 
   // Get available devices
   const devices = await deviceManager.listDevices();
@@ -32,7 +67,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
   if (options.yes) {
     // Use defaults
     answers = {
-      app: options.app ?? './build/MyApp.app',
+      app: options.app ?? suggestedAppPath,
       locales: ['en-US'],
       iphone: iphones[0]?.name ?? 'iPhone 15 Pro Max',
       ipad: ipads[0]?.name ?? 'iPad Pro (13-inch) (M4)',
@@ -45,13 +80,51 @@ export async function initCommand(options: InitOptions): Promise<void> {
     };
   } else {
     // Interactive prompts
-    answers = await inquirer.prompt([
-      {
+    const promptQuestions: any[] = [];
+
+    // If multiple apps detected, let user choose
+    if (detectedApps.length > 1) {
+      promptQuestions.push({
+        type: 'list',
+        name: 'app',
+        message: 'Select your app:',
+        choices: [
+          ...detectedApps.map((app) => ({
+            name: `${app} (detected)`,
+            value: `./${app}`,
+          })),
+          {
+            name: 'Other (enter manually)',
+            value: '__manual__',
+          },
+        ],
+      });
+    } else {
+      promptQuestions.push({
         type: 'input',
         name: 'app',
         message: 'Path to your .app bundle:',
-        default: options.app ?? './build/MyApp.app',
-      },
+        default: options.app ?? suggestedAppPath,
+      });
+    }
+
+    // If user selects manual, ask for path
+    let initialAnswers = await inquirer.prompt(promptQuestions);
+
+    if (initialAnswers.app === '__manual__') {
+      const { manualPath } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'manualPath',
+          message: 'Enter path to your .app bundle:',
+          default: './build/MyApp.app',
+        },
+      ]);
+      initialAnswers.app = manualPath;
+    }
+
+    // Continue with remaining prompts
+    const remainingAnswers = await inquirer.prompt([
       {
         type: 'checkbox',
         name: 'locales',
@@ -129,6 +202,9 @@ export async function initCommand(options: InitOptions): Promise<void> {
         default: 5.0,
       },
     ]);
+
+    // Merge answers
+    answers = { ...initialAnswers, ...remainingAnswers };
   }
 
   // Create config
