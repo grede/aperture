@@ -8,6 +8,7 @@ import { DeviceManager } from '../../core/device-manager.js';
 import { MCPClient } from '../../core/mcp-client.js';
 import { AINavigator } from '../../core/ai-navigator.js';
 import { CostTracker } from '../../core/cost-tracker.js';
+import { LocaleManager } from '../../core/locale-manager.js';
 import type { ApertureConfig, FlowDefinition, LocaleData } from '../../types/index.js';
 
 interface RunOptions {
@@ -80,6 +81,7 @@ export async function runCommand(options: RunOptions): Promise<void> {
 
   // Initialize core components
   const deviceManager = new DeviceManager();
+  const localeManager = new LocaleManager(deviceManager);
   const mcpClient = new MCPClient();
   const costTracker = new CostTracker();
   const aiNavigator = new AINavigator(
@@ -135,11 +137,22 @@ export async function runCommand(options: RunOptions): Promise<void> {
           throw new Error(`Device not found: ${deviceName}`);
         }
 
-        // Boot device
-        const bootSpinner = ora(`Booting ${deviceName}...`).start();
-        await deviceManager.boot(device.udid);
-        await deviceManager.setStatusBar(device.udid);
-        bootSpinner.succeed(`Booted ${deviceName}`);
+        // Set locale if not en-US (default)
+        if (locale !== 'en-US') {
+          const localeSpinner = ora(`Setting locale to ${locale}...`).start();
+          try {
+            await localeManager.setLocale(device.udid, locale);
+            localeSpinner.succeed(`Locale set to ${locale}`);
+          } catch (error) {
+            localeSpinner.warn(`Could not set locale: ${error}`);
+          }
+        } else {
+          // Still boot and set status bar
+          const bootSpinner = ora(`Booting ${deviceName}...`).start();
+          await deviceManager.boot(device.udid);
+          await deviceManager.setStatusBar(device.udid);
+          bootSpinner.succeed(`Booted ${deviceName}`);
+        }
 
         // Install and launch app
         const appSpinner = ora('Installing app...').start();
