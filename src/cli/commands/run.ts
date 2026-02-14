@@ -205,22 +205,29 @@ export async function runCommand(options: RunOptions): Promise<void> {
           throw new Error(`Device not found: ${deviceName}`);
         }
 
-        // Set locale if not en-US (default)
-        if (locale !== 'en-US') {
-          const localeSpinner = ora(`Setting locale to ${locale}...`).start();
-          try {
+        // Boot device first to check current locale
+        const bootSpinner = ora(`Booting ${deviceName}...`).start();
+        await deviceManager.boot(device.udid);
+        bootSpinner.succeed(`Booted ${deviceName}`);
+
+        // Check current locale and set if different from target
+        const localeSpinner = ora(`Verifying locale ${locale}...`).start();
+        try {
+          const currentLocale = await localeManager.getCurrentLocale(device.udid);
+
+          if (currentLocale !== locale) {
+            localeSpinner.text = `Setting locale to ${locale} (current: ${currentLocale})...`;
             await localeManager.setLocale(device.udid, locale);
-            localeSpinner.succeed(`Locale set to ${locale}`);
-          } catch (error) {
-            localeSpinner.warn(`Could not set locale: ${error}`);
+            localeSpinner.succeed(`Locale set to ${locale} (was: ${currentLocale})`);
+          } else {
+            localeSpinner.succeed(`Locale already set to ${locale}`);
           }
-        } else {
-          // Still boot and set status bar
-          const bootSpinner = ora(`Booting ${deviceName}...`).start();
-          await deviceManager.boot(device.udid);
-          await deviceManager.setStatusBar(device.udid);
-          bootSpinner.succeed(`Booted ${deviceName}`);
+        } catch (error) {
+          localeSpinner.warn(`Could not verify/set locale: ${error}`);
         }
+
+        // Set status bar
+        await deviceManager.setStatusBar(device.udid);
 
         // Install and launch app
         const appSpinner = ora('Installing app...').start();
