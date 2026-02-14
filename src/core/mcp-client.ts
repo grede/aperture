@@ -40,6 +40,14 @@ export class MCPClient {
     // Connect
     await this.client.connect(this.transport);
     this.connected = true;
+
+    // Initialize mobile device
+    try {
+      await this.callTool('mobile_init', {});
+    } catch (error) {
+      // mobile_init might not be required, ignore if it fails
+      console.warn('mobile_init failed (may not be required):', error);
+    }
   }
 
   /**
@@ -75,16 +83,20 @@ export class MCPClient {
   async getAccessibilityTree(): Promise<AccessibilityNode> {
     this.ensureConnected();
 
-    const result = await this.callTool('get_accessibility_tree', {});
+    const result = await this.callTool('mobile_dump_ui', {});
     return this.parseAccessibilityTree(result);
   }
 
   /**
    * Tap an element by its ID
+   * Note: mobile-mcp only supports coordinate-based tapping,
+   * so this method would need to extract coordinates from the element
    */
   async tap(elementId: string): Promise<void> {
     this.ensureConnected();
-    await this.callTool('tap', { element_id: elementId });
+    // mobile-mcp doesn't support element_id tapping directly
+    // The AI should provide coordinates instead
+    throw new Error('Element ID tapping not supported by mobile-mcp. Use tapCoordinates() with x,y from element frame.');
   }
 
   /**
@@ -92,7 +104,7 @@ export class MCPClient {
    */
   async tapCoordinates(x: number, y: number): Promise<void> {
     this.ensureConnected();
-    await this.callTool('tap', { x, y });
+    await this.callTool('mobile_tap', { x, y });
   }
 
   /**
@@ -100,15 +112,54 @@ export class MCPClient {
    */
   async type(text: string): Promise<void> {
     this.ensureConnected();
-    await this.callTool('type', { text });
+    await this.callTool('mobile_type', { text });
   }
 
   /**
    * Scroll in a direction
+   * Note: mobile-mcp uses swipe for scrolling
    */
   async scroll(direction: 'up' | 'down' | 'left' | 'right', amount?: number): Promise<void> {
     this.ensureConnected();
-    await this.callTool('scroll', { direction, amount });
+
+    // Convert scroll to swipe coordinates
+    // Assume screen size of 375x812 (iPhone standard) - could be improved to get actual screen size
+    const screenWidth = 375;
+    const screenHeight = 812;
+    const centerX = screenWidth / 2;
+    const centerY = screenHeight / 2;
+    const scrollDistance = amount ?? 200;
+
+    let startX = centerX;
+    let startY = centerY;
+    let endX = centerX;
+    let endY = centerY;
+
+    switch (direction) {
+      case 'up':
+        startY = centerY + scrollDistance;
+        endY = centerY - scrollDistance;
+        break;
+      case 'down':
+        startY = centerY - scrollDistance;
+        endY = centerY + scrollDistance;
+        break;
+      case 'left':
+        startX = centerX + scrollDistance;
+        endX = centerX - scrollDistance;
+        break;
+      case 'right':
+        startX = centerX - scrollDistance;
+        endX = centerX + scrollDistance;
+        break;
+    }
+
+    await this.callTool('mobile_swipe', {
+      start_x: startX,
+      start_y: startY,
+      end_x: endX,
+      end_y: endY
+    });
   }
 
   /**
@@ -116,7 +167,12 @@ export class MCPClient {
    */
   async swipe(startX: number, startY: number, endX: number, endY: number): Promise<void> {
     this.ensureConnected();
-    await this.callTool('swipe', { startX, startY, endX, endY });
+    await this.callTool('mobile_swipe', {
+      start_x: startX,
+      start_y: startY,
+      end_x: endX,
+      end_y: endY
+    });
   }
 
   /**
@@ -124,7 +180,7 @@ export class MCPClient {
    */
   async pressButton(button: 'home' | 'back'): Promise<void> {
     this.ensureConnected();
-    await this.callTool('press_button', { button });
+    await this.callTool('mobile_key_press', { key: button });
   }
 
   /**
@@ -133,7 +189,7 @@ export class MCPClient {
   async takeScreenshot(): Promise<Buffer> {
     this.ensureConnected();
 
-    const result = await this.callTool('take_screenshot', {});
+    const result = await this.callTool('mobile_screenshot', {});
 
     // Result should be base64-encoded PNG
     if (typeof result === 'string') {
@@ -144,49 +200,61 @@ export class MCPClient {
       return Buffer.from((result as { data: string }).data, 'base64');
     }
 
+    if (result && typeof result === 'object' && 'image' in result) {
+      return Buffer.from((result as { image: string }).image, 'base64');
+    }
+
     throw new Error('Invalid screenshot response from MCP server');
   }
 
   /**
    * Get screen information (dimensions, scale, orientation)
+   * Note: mobile-mcp doesn't provide this, so we return default values
    */
   async getScreenInfo(): Promise<ScreenInfo> {
     this.ensureConnected();
 
-    const result = await this.callTool('get_screen_info', {});
-    return result as ScreenInfo;
+    // mobile-mcp doesn't have get_screen_info
+    // Return default iPhone screen info
+    return {
+      width: 375,
+      height: 812,
+      scale: 3,
+      orientation: 'portrait'
+    };
   }
 
   /**
    * Install an app
+   * Note: Not supported by mobile-mcp, use DeviceManager instead
    */
   async installApp(appPath: string): Promise<void> {
-    this.ensureConnected();
-    await this.callTool('install_app', { path: appPath });
+    throw new Error('installApp not supported by mobile-mcp. Use DeviceManager.install() instead.');
   }
 
   /**
    * Launch an app by bundle ID
+   * Note: mobile-mcp uses mobile_open_app with package name
    */
   async launchApp(bundleId: string): Promise<void> {
     this.ensureConnected();
-    await this.callTool('launch_app', { bundle_id: bundleId });
+    await this.callTool('mobile_open_app', { package: bundleId });
   }
 
   /**
    * Terminate an app by bundle ID
+   * Note: Not supported by mobile-mcp, use DeviceManager instead
    */
   async terminateApp(bundleId: string): Promise<void> {
-    this.ensureConnected();
-    await this.callTool('terminate_app', { bundle_id: bundleId });
+    throw new Error('terminateApp not supported by mobile-mcp. Use DeviceManager.terminate() instead.');
   }
 
   /**
    * Uninstall an app by bundle ID
+   * Note: Not supported by mobile-mcp, use DeviceManager instead
    */
   async uninstallApp(bundleId: string): Promise<void> {
-    this.ensureConnected();
-    await this.callTool('uninstall_app', { bundle_id: bundleId });
+    throw new Error('uninstallApp not supported by mobile-mcp. Use DeviceManager.uninstall() instead.');
   }
 
   /**
