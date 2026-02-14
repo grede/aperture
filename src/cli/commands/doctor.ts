@@ -144,6 +144,23 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
     hasIssues = true;
   }
 
+  // Check for WebDriverAgent (required for mobile-mcp iOS support)
+  console.log(chalk.bold('WebDriverAgent for iOS'));
+  console.log(chalk.yellow('  ⚠ WebDriverAgent must be running on iOS Simulator\n'));
+  console.log(chalk.dim('  mobile-mcp requires WebDriverAgent to control iOS devices.'));
+  console.log(chalk.dim('  WebDriverAgent must be running BEFORE aperture run.\n'));
+  console.log(chalk.bold('  Setup WebDriverAgent:\n'));
+  console.log(chalk.cyan('    1. Clone WebDriverAgent:'));
+  console.log(chalk.dim('       git clone --depth 1 https://github.com/appium/WebDriverAgent.git\n'));
+  console.log(chalk.cyan('    2. Start WebDriverAgent (replace iPhone name):'));
+  console.log(chalk.dim('       cd WebDriverAgent'));
+  console.log(chalk.dim('       xcodebuild -project WebDriverAgent.xcodeproj \\'));
+  console.log(chalk.dim('                  -scheme WebDriverAgentRunner \\'));
+  console.log(chalk.dim('                  -destination \'platform=iOS Simulator,name=iPhone 17 Pro Max\' \\'));
+  console.log(chalk.dim('                  test\n'));
+  console.log(chalk.cyan('    3. Keep WebDriverAgent running in a separate terminal'));
+  console.log(chalk.cyan('    4. Then run aperture run\n'));
+
   // Test MCP connection if mobile-mcp is available
   if (hasMobileMcp || !hasIssues) {
     console.log(chalk.bold('MCP Server Connection Test'));
