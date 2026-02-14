@@ -1,8 +1,16 @@
 import type { CostSummary } from '../types/index.js';
 
-// ── Pricing Constants (as of Jan 2025) ────────────────────────
+// ── Pricing Constants (as of Feb 2026) ────────────────────────
 
 const MODEL_PRICING: Record<string, { prompt: number; completion: number }> = {
+  'gpt-5.1': {
+    prompt: 3.0 / 1_000_000, // $3.00 per 1M input tokens
+    completion: 12.0 / 1_000_000, // $12.00 per 1M output tokens
+  },
+  'gpt-5-mini': {
+    prompt: 0.2 / 1_000_000, // $0.20 per 1M input tokens
+    completion: 0.8 / 1_000_000, // $0.80 per 1M output tokens
+  },
   'gpt-4o': {
     prompt: 2.5 / 1_000_000, // $2.50 per 1M input tokens
     completion: 10.0 / 1_000_000, // $10.00 per 1M output tokens
