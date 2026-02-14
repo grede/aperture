@@ -254,6 +254,35 @@ export async function runCommand(options: RunOptions): Promise<void> {
                   );
                 });
               }
+            } else if (step.action === 'action') {
+              const result = await aiNavigator.navigate(
+                step.instruction,
+                mcpClient,
+                costTracker,
+                {
+                  maxActionsPerStep: config.guardrails.maxActionsPerStep,
+                  stepTimeoutMs: config.guardrails.stepTimeoutSec * 1000,
+                  runTimeoutMs: config.guardrails.runTimeoutSec * 1000,
+                  forbiddenActions: config.guardrails.forbiddenActions,
+                  costCapUsd: config.guardrails.costCapUsd,
+                }
+              );
+
+              if (!result.success) {
+                throw new Error(result.error ?? 'Action failed');
+              }
+
+              stepSpinner.succeed(
+                `[${stepNum}/${resolvedFlow.steps.length}] action (${result.actionsExecuted} actions, ${costTracker.getFormattedCost()})`
+              );
+
+              if (options.verbose) {
+                result.actionHistory.forEach((action, idx) => {
+                  console.log(
+                    chalk.dim(`    ${idx + 1}. ${action.action} - ${action.reasoning}`)
+                  );
+                });
+              }
             } else if (step.action === 'screenshot') {
               const screenshot = await mcpClient.takeScreenshot();
               const screenshotPath = join(outputDir, `${step.label}.png`);

@@ -7,6 +7,7 @@ export interface FlowDefinition {
 
 export type FlowStep =
   | { action: 'navigate'; instruction: string }
+  | { action: 'action'; instruction: string }
   | { action: 'screenshot'; label: string }
   | { action: 'type'; text: string }
   | { action: 'wait'; duration?: number; condition?: string };

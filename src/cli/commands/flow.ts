@@ -18,6 +18,8 @@ function formatStep(step: FlowStep, index: number): string {
   switch (step.action) {
     case 'navigate':
       return `${num} ${chalk.blue('Navigate')}: ${chalk.dim(step.instruction)}`;
+    case 'action':
+      return `${num} ${chalk.cyan('Action')}: ${chalk.dim(step.instruction)}`;
     case 'screenshot':
       return `${num} ${chalk.green('Screenshot')}: ${chalk.cyan(step.label)}`;
     case 'type':
@@ -62,6 +64,23 @@ async function createNavigateStep(): Promise<FlowStep> {
   ]);
 
   return { action: 'navigate', instruction };
+}
+
+/**
+ * Prompt for a new action step
+ */
+async function createActionStep(): Promise<FlowStep> {
+  const { instruction } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'instruction',
+      message: 'Enter action instruction:',
+      validate: (input: string) =>
+        input.trim().length > 0 || 'Instruction cannot be empty',
+    },
+  ]);
+
+  return { action: 'action', instruction };
 }
 
 /**
@@ -156,6 +175,7 @@ async function addStep(): Promise<FlowStep> {
       message: 'Select step type:',
       choices: [
         { name: '🧭 Navigate - AI navigates to a screen', value: 'navigate' },
+        { name: '🎯 Action - AI performs an action', value: 'action' },
         { name: '📸 Screenshot - Capture current screen', value: 'screenshot' },
         { name: '⌨️  Type - Enter text', value: 'type' },
         { name: '⏱️  Wait - Pause execution', value: 'wait' },
@@ -166,6 +186,8 @@ async function addStep(): Promise<FlowStep> {
   switch (actionType) {
     case 'navigate':
       return createNavigateStep();
+    case 'action':
+      return createActionStep();
     case 'screenshot':
       return createScreenshotStep();
     case 'type':
@@ -203,6 +225,8 @@ async function editStep(currentStep: FlowStep): Promise<FlowStep> {
   switch (currentStep.action) {
     case 'navigate':
       return createNavigateStep();
+    case 'action':
+      return createActionStep();
     case 'screenshot':
       return createScreenshotStep();
     case 'type':
