@@ -42,4 +42,4 @@ llm:
 
 # MCP server endpoint
 mcp:
-  endpoint: stdio://mobile-mcp
+  endpoint: stdio://mcp-server-mobile

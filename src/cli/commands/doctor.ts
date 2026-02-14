@@ -35,9 +35,9 @@ async function commandExists(command: string): Promise<boolean> {
  */
 async function installMobileMcp(): Promise<boolean> {
   return new Promise((resolve) => {
-    console.log(chalk.dim('\n  Installing mobile-mcp globally via npm...\n'));
+    console.log(chalk.dim('\n  Installing @mobilenext/mobile-mcp globally via npm...\n'));
 
-    const proc = spawn('npm', ['install', '-g', 'mobile-mcp'], {
+    const proc = spawn('npm', ['install', '-g', '@mobilenext/mobile-mcp'], {
       stdio: 'inherit',
     });
 
@@ -290,14 +290,14 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
   }
 
   // Check for mobile-mcp
-  console.log(chalk.bold('MCP Server (mobile-mcp)'));
-  const hasMobileMcp = await commandExists('mobile-mcp');
+  console.log(chalk.bold('MCP Server (@mobilenext/mobile-mcp)'));
+  const hasMobileMcp = await commandExists('mcp-server-mobile');
 
   if (hasMobileMcp) {
-    console.log(chalk.green('  ✓ mobile-mcp found in PATH\n'));
+    console.log(chalk.green('  ✓ mcp-server-mobile found in PATH\n'));
   } else {
-    console.log(chalk.red('  ✗ mobile-mcp not found in PATH\n'));
-    console.log(chalk.yellow('    mobile-mcp is required to control iOS Simulators\n'));
+    console.log(chalk.red('  ✗ mcp-server-mobile not found in PATH\n'));
+    console.log(chalk.yellow('    @mobilenext/mobile-mcp is required to control iOS Simulators\n'));
     hasIssues = true;
 
     // Offer to install if --fix or interactive mode
@@ -308,9 +308,9 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
       if (success) {
         spinner.succeed('mobile-mcp installed successfully');
       } else {
-        spinner.fail('Failed to install mobile-mcp');
+        spinner.fail('Failed to install @mobilenext/mobile-mcp');
         console.log(chalk.yellow('\n  Please install manually:'));
-        console.log(chalk.cyan('  npm install -g mobile-mcp\n'));
+        console.log(chalk.cyan('  npm install -g @mobilenext/mobile-mcp\n'));
       }
     } else {
       const { install } = await inquirer.prompt([
@@ -326,12 +326,12 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
         const success = await installMobileMcp();
 
         if (success) {
-          console.log(chalk.green('\n✓ mobile-mcp installed successfully\n'));
+          console.log(chalk.green('\n✓ @mobilenext/mobile-mcp installed successfully\n'));
           hasIssues = false; // Fixed the issue
         } else {
-          console.log(chalk.red('\n✗ Failed to install mobile-mcp\n'));
+          console.log(chalk.red('\n✗ Failed to install @mobilenext/mobile-mcp\n'));
           console.log(chalk.yellow('  Please install manually:'));
-          console.log(chalk.cyan('  npm install -g mobile-mcp\n'));
+          console.log(chalk.cyan('  npm install -g @mobilenext/mobile-mcp\n'));
         }
       } else {
         console.log(chalk.yellow('\n  You can install it later with:'));
@@ -347,7 +347,7 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
 
     try {
       const mcpClient = new MCPClient();
-      await mcpClient.connect('stdio://mobile-mcp');
+      await mcpClient.connect('stdio://mcp-server-mobile');
 
       const tools = await mcpClient.listTools();
       mcpSpinner.succeed('MCP server connection successful');

@@ -43,11 +43,11 @@ export async function runCommand(options: RunOptions): Promise<void> {
   const startTime = Date.now();
 
   // Check for mobile-mcp before proceeding
-  const hasMobileMcp = await commandExists('mobile-mcp');
+  const hasMobileMcp = await commandExists('mcp-server-mobile');
 
   if (!hasMobileMcp) {
-    console.error(chalk.red('\n✗ mobile-mcp not found in PATH\n'));
-    console.log(chalk.yellow('mobile-mcp is required to control iOS Simulators.\n'));
+    console.error(chalk.red('\n✗ mcp-server-mobile not found in PATH\n'));
+    console.log(chalk.yellow('@mobilenext/mobile-mcp is required to control iOS Simulators.\n'));
     console.log(chalk.dim('Run the following command to check and install dependencies:\n'));
     console.log(chalk.cyan('  aperture doctor\n'));
     process.exit(1);

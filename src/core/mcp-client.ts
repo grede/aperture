@@ -45,18 +45,17 @@ export class MCPClient {
 
   /**
    * Initialize mobile device for iOS simulator
+   * The new @mobilenext/mobile-mcp auto-detects devices and WebDriverAgent
    */
   async initializeDevice(udid: string): Promise<void> {
     this.ensureConnected();
     this.deviceUdid = udid;
 
-    // Initialize mobile-mcp for iOS simulator with WebDriverAgent
-    await this.callTool('mobile_init', {
-      platform: 'ios',
-      device_id: udid,
-      udid: udid,
-      wda_url: 'http://localhost:8100'
-    });
+    // List available devices to verify the simulator is detected
+    const result = await this.callTool('mobile_list_available_devices', { noParams: {} });
+
+    // The device should be auto-selected since WebDriverAgent is running
+    // No explicit initialization needed with the new API
   }
 
   /**
@@ -92,7 +91,8 @@ export class MCPClient {
   async getAccessibilityTree(): Promise<AccessibilityNode> {
     this.ensureConnected();
 
-    const result = await this.callTool('mobile_dump_ui', {});
+    // Use the device UDID that was set during initialization
+    const result = await this.callTool('mobile_list_elements_on_screen', { device: this.deviceUdid });
     return this.parseAccessibilityTree(result);
   }
 
@@ -113,7 +113,7 @@ export class MCPClient {
    */
   async tapCoordinates(x: number, y: number): Promise<void> {
     this.ensureConnected();
-    await this.callTool('mobile_tap', { x, y });
+    await this.callTool('mobile_click_on_screen_at_coordinates', { device: this.deviceUdid, x, y });
   }
 
   /**
@@ -121,7 +121,7 @@ export class MCPClient {
    */
   async type(text: string): Promise<void> {
     this.ensureConnected();
-    await this.callTool('mobile_type', { text });
+    await this.callTool('mobile_type_keys', { device: this.deviceUdid, text });
   }
 
   /**
@@ -176,7 +176,8 @@ export class MCPClient {
    */
   async swipe(startX: number, startY: number, endX: number, endY: number): Promise<void> {
     this.ensureConnected();
-    await this.callTool('mobile_swipe', {
+    await this.callTool('mobile_swipe_on_screen', {
+      device: this.deviceUdid,
       start_x: startX,
       start_y: startY,
       end_x: endX,
@@ -189,7 +190,7 @@ export class MCPClient {
    */
   async pressButton(button: 'home' | 'back'): Promise<void> {
     this.ensureConnected();
-    await this.callTool('mobile_key_press', { key: button });
+    await this.callTool('mobile_press_button', { device: this.deviceUdid, button });
   }
 
   /**
@@ -198,7 +199,7 @@ export class MCPClient {
   async takeScreenshot(): Promise<Buffer> {
     this.ensureConnected();
 
-    const result = await this.callTool('mobile_screenshot', {});
+    const result = await this.callTool('mobile_take_screenshot', { device: this.deviceUdid });
 
     // Result should be base64-encoded PNG
     if (typeof result === 'string') {
@@ -211,6 +212,10 @@ export class MCPClient {
 
     if (result && typeof result === 'object' && 'image' in result) {
       return Buffer.from((result as { image: string }).image, 'base64');
+    }
+
+    if (result && typeof result === 'object' && 'base64' in result) {
+      return Buffer.from((result as { base64: string }).base64, 'base64');
     }
 
     throw new Error('Invalid screenshot response from MCP server');
