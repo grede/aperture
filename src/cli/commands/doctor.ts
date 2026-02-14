@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import ora from 'ora';
+import { MCPClient } from '../../core/mcp-client.js';
 
 interface DoctorOptions {
   fix?: boolean;
@@ -141,6 +142,36 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
   } else {
     console.log(chalk.red('  ✗ npm not found (required to install mobile-mcp)\n'));
     hasIssues = true;
+  }
+
+  // Test MCP connection if mobile-mcp is available
+  if (hasMobileMcp || !hasIssues) {
+    console.log(chalk.bold('MCP Server Connection Test'));
+    const mcpSpinner = ora('Testing connection to mobile-mcp...').start();
+
+    try {
+      const mcpClient = new MCPClient();
+      await mcpClient.connect('stdio://mobile-mcp');
+
+      const tools = await mcpClient.listTools();
+      mcpSpinner.succeed('MCP server connection successful');
+
+      console.log(chalk.dim(`\n  Available MCP tools (${tools.length}):\n`));
+      tools.forEach((tool) => {
+        console.log(chalk.cyan(`    • ${tool.name}`) + (tool.description ? chalk.dim(` - ${tool.description}`) : ''));
+      });
+      console.log();
+
+      await mcpClient.disconnect();
+    } catch (error) {
+      mcpSpinner.fail('MCP server connection failed');
+      console.log(chalk.red(`\n  Error: ${error instanceof Error ? error.message : error}\n`));
+      console.log(chalk.yellow('  This may indicate:'));
+      console.log(chalk.dim('    - mobile-mcp is not properly installed'));
+      console.log(chalk.dim('    - mobile-mcp is not in PATH'));
+      console.log(chalk.dim('    - Incompatible mobile-mcp version\n'));
+      hasIssues = true;
+    }
   }
 
   // Summary

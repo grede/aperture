@@ -43,6 +43,19 @@ export class MCPClient {
   }
 
   /**
+   * List available tools from the MCP server
+   */
+  async listTools(): Promise<Array<{ name: string; description?: string }>> {
+    this.ensureConnected();
+
+    const result = await this.client!.listTools();
+    return result.tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+    }));
+  }
+
+  /**
    * Disconnect from the MCP server
    */
   async disconnect(): Promise<void> {
