@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { resolve, join } from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import inquirer from 'inquirer';
 import YAML from 'yaml';
 import { FlowParser } from '../../core/flow-parser.js';
 import { DeviceManager } from '../../core/device-manager.js';
@@ -36,9 +37,30 @@ export async function runCommand(options: RunOptions): Promise<void> {
       config.llm.apiKey = process.env[envVar] ?? '';
 
       if (!config.llm.apiKey) {
-        throw new Error(
-          `Environment variable ${envVar} not set. Please set your OpenAI API key.`
-        );
+        console.log(chalk.yellow(`\n⚠  Environment variable ${envVar} not found.\n`));
+
+        const { apiKey } = await inquirer.prompt([
+          {
+            type: 'password',
+            name: 'apiKey',
+            message: 'Enter your OpenAI API key:',
+            mask: '*',
+            validate: (input: string) => {
+              if (!input || input.trim().length === 0) {
+                return 'API key is required';
+              }
+              if (!input.startsWith('sk-')) {
+                return 'OpenAI API keys typically start with "sk-"';
+              }
+              return true;
+            },
+          },
+        ]);
+
+        config.llm.apiKey = apiKey;
+
+        console.log(chalk.dim(`\nℹ  To avoid this prompt in the future, set:`));
+        console.log(chalk.cyan(`   export ${envVar}="${apiKey}"\n`));
       }
     }
   } catch (error) {
