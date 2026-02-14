@@ -172,10 +172,14 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
   async tapCoordinates(x: number, y: number): Promise<void> {
     this.ensureConnected();
 
+    // idb requires integer coordinates - round to nearest pixel
+    const roundedX = Math.round(x);
+    const roundedY = Math.round(y);
+
     await this.callTool('ui_tap', {
       udid: this.deviceUdid,
-      x,
-      y,
+      x: roundedX,
+      y: roundedY,
       // Default tap duration (can be customized if needed)
       duration: '0.1'
     });
@@ -236,12 +240,13 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
         break;
     }
 
+    // idb requires integer coordinates
     await this.callTool('ui_swipe', {
       udid: this.deviceUdid,
-      x_start,
-      y_start,
-      x_end,
-      y_end,
+      x_start: Math.round(x_start),
+      y_start: Math.round(y_start),
+      x_end: Math.round(x_end),
+      y_end: Math.round(y_end),
       duration: '0.3',
       delta: 10 // Step size for smoother swipe
     });
@@ -250,12 +255,13 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
   async swipe(startX: number, startY: number, endX: number, endY: number): Promise<void> {
     this.ensureConnected();
 
+    // idb requires integer coordinates
     await this.callTool('ui_swipe', {
       udid: this.deviceUdid,
-      x_start: startX,
-      y_start: startY,
-      x_end: endX,
-      y_end: endY,
+      x_start: Math.round(startX),
+      y_start: Math.round(startY),
+      x_end: Math.round(endX),
+      y_end: Math.round(endY),
       duration: '0.3',
       delta: 10
     });
