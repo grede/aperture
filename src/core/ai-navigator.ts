@@ -324,17 +324,20 @@ export class AINavigator {
     return `You are an AI agent controlling an iOS app in the Simulator. Your job is to navigate the app to reach a specific screen or state.
 
 Available actions:
-- tap: Tap an element by ID or coordinates { "type": "tap", "params": { "element_id": "..." } } or { "type": "tap", "params": { "x": 100, "y": 200 } }
-- type: Type text { "type": "type", "params": { "text": "..." } }
+- tap: Tap at coordinates (extract x,y from element's frame) { "type": "tap", "params": { "x": 100, "y": 200 } }
+- type: Type text into focused field { "type": "type", "params": { "text": "..." } }
 - scroll: Scroll in a direction { "type": "scroll", "params": { "direction": "up|down|left|right", "amount": 100 } }
 - swipe: Swipe gesture { "type": "swipe", "params": { "startX": 100, "startY": 100, "endX": 200, "endY": 200 } }
 - press_button: Press home or back { "type": "press_button", "params": { "button": "home|back" } }
-- wait: Wait for duration { "type": "wait", "params": { "duration": 1000 } }
+- wait: Wait for duration in ms { "type": "wait", "params": { "duration": 1000 } }
 
 You will receive:
 1. The navigation instruction (what screen/state to reach)
-2. The current accessibility tree (UI structure)
+2. The current accessibility tree (UI elements with their positions and attributes)
 3. History of actions already taken
+
+The accessibility tree includes each element's "frame" property with x, y, width, height.
+To tap an element, calculate the center point: x = frame.x + (frame.width / 2), y = frame.y + (frame.height / 2)
 
 Respond with JSON containing:
 {
@@ -344,10 +347,11 @@ Respond with JSON containing:
 }
 
 Be smart:
-- Prefer tapping elements by ID when available
+- Calculate tap coordinates from element frames (center of the element)
 - Don't repeat failed actions
-- Consider the current screen state
-- Think step-by-step toward the goal`;
+- Consider the current screen state and visible elements
+- Think step-by-step toward the goal
+- If an element isn't visible, try scrolling first`;
   }
 
   /**
