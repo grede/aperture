@@ -1,5 +1,7 @@
-import { exec } from 'child_process';
+import { exec, spawn, ChildProcess } from 'child_process';
 import { promisify } from 'util';
+import { homedir } from 'os';
+import { join } from 'path';
 import type { SimulatorDevice } from '../types/index.js';
 
 const execAsync = promisify(exec);
@@ -162,5 +164,83 @@ export class DeviceManager {
       `/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${appPath}/Info.plist"`
     );
     return stdout.trim();
+  }
+
+  /**
+   * Check if WebDriverAgent is running on the default port (8100)
+   */
+  async isWebDriverAgentRunning(): Promise<boolean> {
+    try {
+      // Check if port 8100 is listening (WDA's default port)
+      const { stdout } = await execAsync('lsof -i :8100 -P -n -sTCP:LISTEN');
+      return stdout.includes('8100');
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Start WebDriverAgent for a specific device
+   * Returns the child process (caller should keep it alive)
+   */
+  async startWebDriverAgent(deviceName: string): Promise<ChildProcess> {
+    const wdaPath = join(homedir(), 'WebDriverAgent');
+
+    // Start WDA in test mode (keeps running)
+    const proc = spawn(
+      'xcodebuild',
+      [
+        '-project',
+        join(wdaPath, 'WebDriverAgent.xcodeproj'),
+        '-scheme',
+        'WebDriverAgentRunner',
+        '-destination',
+        `platform=iOS Simulator,name=${deviceName}`,
+        'test',
+      ],
+      {
+        cwd: wdaPath,
+        detached: true,
+        stdio: 'ignore', // Don't inherit stdio, run completely in background
+      }
+    );
+
+    // Unref so parent process can exit without waiting for WDA
+    proc.unref();
+
+    return proc;
+  }
+
+  /**
+   * Wait for WebDriverAgent to be ready
+   * Polls the HTTP endpoint until it responds
+   */
+  async waitForWebDriverAgent(maxWaitMs = 60000): Promise<void> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitMs) {
+      if (await this.isWebDriverAgentRunning()) {
+        // Give it a moment to fully initialize
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    throw new Error(`WebDriverAgent failed to start within ${maxWaitMs}ms`);
+  }
+
+  /**
+   * Ensure WebDriverAgent is running for the specified device
+   * Starts it if not already running
+   */
+  async ensureWebDriverAgentRunning(deviceName: string): Promise<void> {
+    const isRunning = await this.isWebDriverAgentRunning();
+
+    if (!isRunning) {
+      await this.startWebDriverAgent(deviceName);
+      await this.waitForWebDriverAgent();
+    }
   }
 }

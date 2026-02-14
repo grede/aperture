@@ -237,6 +237,18 @@ export async function runCommand(options: RunOptions): Promise<void> {
         await deviceManager.launch(device.udid, bundleId);
         appSpinner.succeed('App launched');
 
+        // Ensure WebDriverAgent is running
+        const wdaSpinner = ora('Checking WebDriverAgent...').start();
+        const wdaRunning = await deviceManager.isWebDriverAgentRunning();
+
+        if (wdaRunning) {
+          wdaSpinner.succeed('WebDriverAgent already running');
+        } else {
+          wdaSpinner.text = `Starting WebDriverAgent for ${deviceName}...`;
+          await deviceManager.ensureWebDriverAgentRunning(deviceName);
+          wdaSpinner.succeed('WebDriverAgent started');
+        }
+
         // Connect to MCP
         const mcpSpinner = ora('Connecting to MCP server...').start();
         await mcpClient.connect(config.mcp.endpoint);

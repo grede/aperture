@@ -172,12 +172,7 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
 
   if (wdaExists) {
     console.log(chalk.green(`  ✓ WebDriverAgent found at ${wdaPath}\n`));
-    console.log(chalk.dim('  To start WebDriverAgent, run in a separate terminal:\n'));
-    console.log(chalk.cyan('    cd ~/WebDriverAgent'));
-    console.log(chalk.cyan('    xcodebuild -project WebDriverAgent.xcodeproj \\'));
-    console.log(chalk.cyan('               -scheme WebDriverAgentRunner \\'));
-    console.log(chalk.cyan('               -destination \'platform=iOS Simulator,name=YOUR_DEVICE\' \\'));
-    console.log(chalk.cyan('               test\n'));
+    console.log(chalk.dim('  WebDriverAgent will start automatically when running aperture run\n'));
   } else {
     console.log(chalk.red(`  ✗ WebDriverAgent not found at ${wdaPath}\n`));
     console.log(chalk.yellow('    WebDriverAgent is required for mobile-mcp to control iOS Simulators\n'));
@@ -211,12 +206,7 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
         if (built) {
           buildSpinner.succeed('WebDriverAgent built successfully');
           console.log(chalk.green('\n  WebDriverAgent is ready!\n'));
-          console.log(chalk.dim('  To start WebDriverAgent, run in a separate terminal:\n'));
-          console.log(chalk.cyan('    cd ~/WebDriverAgent'));
-          console.log(chalk.cyan('    xcodebuild -project WebDriverAgent.xcodeproj \\'));
-          console.log(chalk.cyan('               -scheme WebDriverAgentRunner \\'));
-          console.log(chalk.cyan(`               -destination 'platform=iOS Simulator,name=${deviceName}' \\`));
-          console.log(chalk.cyan('               test\n'));
+          console.log(chalk.dim('  It will start automatically when you run aperture run\n'));
           hasIssues = false; // Fixed the issue
         } else {
           buildSpinner.fail('Failed to build WebDriverAgent');
@@ -276,12 +266,7 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
 
           if (built) {
             console.log(chalk.green('\n✓ WebDriverAgent built successfully\n'));
-            console.log(chalk.dim('  To start WebDriverAgent, run in a separate terminal:\n'));
-            console.log(chalk.cyan('    cd ~/WebDriverAgent'));
-            console.log(chalk.cyan('    xcodebuild -project WebDriverAgent.xcodeproj \\'));
-            console.log(chalk.cyan('               -scheme WebDriverAgentRunner \\'));
-            console.log(chalk.cyan(`               -destination 'platform=iOS Simulator,name=${deviceName}' \\`));
-            console.log(chalk.cyan('               test\n'));
+            console.log(chalk.dim('  It will start automatically when you run aperture run\n'));
             hasIssues = false; // Fixed the issue
           } else {
             console.log(chalk.red('\n✗ Failed to build WebDriverAgent\n'));
