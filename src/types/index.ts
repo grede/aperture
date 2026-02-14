@@ -107,7 +107,7 @@ export interface ApertureConfig {
   locales: string[];
   devices: {
     iphone: string;
-    ipad: string;
+    ipad?: string; // Optional: user can skip iPad screenshots
   };
   template: {
     style: TemplateStyle;

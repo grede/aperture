@@ -172,12 +172,18 @@ export async function initCommand(options: InitOptions): Promise<void> {
         type: 'list',
         name: 'ipad',
         message: 'Select iPad simulator:',
-        choices: ipads.map((d) => ({
-          name: d.state === 'Booted'
-            ? `${chalk.green('●')} ${d.name} ${chalk.dim('(booted)')}`
-            : `${chalk.dim('○')} ${d.name}`,
-          value: d.name,
-        })),
+        choices: [
+          {
+            name: chalk.yellow('⊗ Skip iPad (iPhone only)'),
+            value: '__skip__',
+          },
+          ...ipads.map((d) => ({
+            name: d.state === 'Booted'
+              ? `${chalk.green('●')} ${d.name} ${chalk.dim('(booted)')}`
+              : `${chalk.dim('○')} ${d.name}`,
+            value: d.name,
+          })),
+        ],
         default: 0,
       },
       {
@@ -230,14 +236,13 @@ export async function initCommand(options: InitOptions): Promise<void> {
   }
 
   // Create config
-  const config = {
+  const config: any = {
     app: answers.app,
     bundleId: 'com.example.myapp',
     flow: './aperture-flow.yaml',
     locales: answers.locales,
     devices: {
       iphone: answers.iphone,
-      ipad: answers.ipad,
     },
     template: {
       style: answers.style,
@@ -260,6 +265,11 @@ export async function initCommand(options: InitOptions): Promise<void> {
       endpoint: 'stdio://mobile-mcp',
     },
   };
+
+  // Add iPad to devices if not skipped
+  if (answers.ipad && answers.ipad !== '__skip__') {
+    config.devices.ipad = answers.ipad;
+  }
 
   // Example flow
   const exampleFlow = {

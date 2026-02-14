@@ -65,11 +65,27 @@ export async function runCommand(options: RunOptions): Promise<void> {
 
   // Determine locales and devices to run
   const locales = options.locale ? [options.locale] : config.locales;
-  const devices = options.device === 'iphone'
-    ? ['iphone' as const]
-    : options.device === 'ipad'
-    ? ['ipad' as const]
-    : ['iphone' as const, 'ipad' as const];
+
+  // Determine which devices to use based on config and options
+  let devices: ('iphone' | 'ipad')[];
+
+  if (options.device === 'iphone') {
+    devices = ['iphone'];
+  } else if (options.device === 'ipad') {
+    if (!config.devices.ipad) {
+      console.error(chalk.red('Error: iPad not configured in aperture.config.yaml'));
+      console.log(chalk.dim('Run aperture init to configure iPad, or use --device iphone\n'));
+      process.exit(1);
+    }
+    devices = ['ipad'];
+  } else {
+    // Default to both, but only include iPad if configured
+    devices = config.devices.ipad ? ['iphone', 'ipad'] : ['iphone'];
+
+    if (!config.devices.ipad) {
+      console.log(chalk.yellow('ℹ  iPad not configured, running iPhone only\n'));
+    }
+  }
 
   const totalRuns = locales.length * devices.length;
   let completedRuns = 0;
@@ -95,7 +111,7 @@ export async function runCommand(options: RunOptions): Promise<void> {
   for (const locale of locales) {
     for (const deviceType of devices) {
       completedRuns++;
-      const deviceName = deviceType === 'iphone' ? config.devices.iphone : config.devices.ipad;
+      const deviceName = deviceType === 'iphone' ? config.devices.iphone : config.devices.ipad!;
 
       console.log(
         chalk.bold(
