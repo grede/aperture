@@ -81,7 +81,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
     answers = {
       app: options.app ?? suggestedAppPath,
       locales: ['en-US'],
-      iphone: iphones[0]?.name ?? 'iPhone 15 Pro Max',
+      iphone: iphones[0]?.name ?? 'iPhone 17 Pro Max',
       ipad: ipads[0]?.name ?? 'iPad Pro (13-inch) (M4)',
       style: 'minimal',
       output: './aperture-output',

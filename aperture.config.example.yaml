@@ -15,7 +15,7 @@ locales:
 
 # Device simulators to use
 devices:
-  iphone: "iPhone 15 Pro Max"
+  iphone: "iPhone 17 Pro Max"
   ipad: "iPad Pro (13-inch) (M4)"
 
 # Template style for final export
