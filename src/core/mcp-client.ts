@@ -335,15 +335,39 @@ export class MCPClient {
 
   /**
    * Parse accessibility tree from MCP response
+   * @mobilenext/mobile-mcp returns an array of elements, convert to tree
    */
   private parseAccessibilityTree(data: unknown): AccessibilityNode {
-    // The MCP server should return a structured accessibility tree
-    // This is a simplified parser - adjust based on actual mobile-mcp format
-    if (typeof data !== 'object' || data === null) {
-      throw new Error('Invalid accessibility tree data');
+    // New format is an array of elements with coordinates
+    if (!Array.isArray(data)) {
+      throw new Error('Invalid accessibility tree data: expected array');
     }
 
-    return data as AccessibilityNode;
+    // Convert array format to tree format
+    const children: AccessibilityNode[] = data.map((element: any) => ({
+      role: element.type || element.label || 'Unknown',
+      label: element.label || element.name || '',
+      value: element.value || '',
+      id: element.identifier || `${element.coordinates?.x || 0}-${element.coordinates?.y || 0}`,
+      traits: [],
+      frame: element.coordinates ? {
+        x: element.coordinates.x,
+        y: element.coordinates.y,
+        width: element.coordinates.width,
+        height: element.coordinates.height
+      } : { x: 0, y: 0, width: 0, height: 0 },
+      children: []
+    }));
+
+    // Create root node
+    return {
+      role: 'Window',
+      label: 'Screen',
+      id: 'root',
+      traits: [],
+      frame: { x: 0, y: 0, width: 0, height: 0 },
+      children
+    };
   }
 
   /**
