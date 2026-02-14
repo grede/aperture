@@ -188,7 +188,25 @@ export class MCPClient {
         const result = await this.client!.callTool({ name, arguments: args }, undefined);
 
         if (result.isError) {
-          throw new Error(`MCP tool error: ${result.content}`);
+          // Format error content properly
+          let errorMessage = 'Unknown error';
+
+          if (Array.isArray(result.content)) {
+            errorMessage = result.content.map((item: any) => {
+              if (typeof item === 'string') return item;
+              if (item && typeof item === 'object') {
+                if ('text' in item) return item.text;
+                return JSON.stringify(item, null, 2);
+              }
+              return String(item);
+            }).join('\n');
+          } else if (typeof result.content === 'string') {
+            errorMessage = result.content;
+          } else if (result.content && typeof result.content === 'object') {
+            errorMessage = JSON.stringify(result.content, null, 2);
+          }
+
+          throw new Error(`MCP tool '${name}' error: ${errorMessage}`);
         }
 
         // Extract content from result
@@ -206,7 +224,9 @@ export class MCPClient {
         return result.content;
       } catch (error) {
         if (attempt === maxRetries - 1) {
-          throw new Error(`MCP call failed after ${maxRetries} attempts: ${error}`);
+          // Format the final error message with better detail
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          throw new Error(`MCP call '${name}' failed after ${maxRetries} attempts: ${errorMsg}`);
         }
 
         // Exponential backoff
@@ -215,7 +235,7 @@ export class MCPClient {
       }
     }
 
-    throw new Error('MCP call failed: max retries exceeded');
+    throw new Error(`MCP call '${name}' failed: max retries exceeded`);
   }
 
   /**

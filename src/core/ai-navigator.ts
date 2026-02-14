@@ -78,9 +78,24 @@ export class AINavigator {
         }
 
         // 3. ACT: Execute the action
-        const actionSuccess = await this.executeAction(action, mcpClient);
+        let actionSuccess = false;
+        try {
+          await this.executeAction(action, mcpClient);
+          actionSuccess = true;
+        } catch (error) {
+          // Record the failed action and re-throw
+          actionHistory.push({
+            timestamp: Date.now(),
+            action: action.type,
+            params: action.params,
+            reasoning: action.reasoning,
+            success: false,
+          });
+          actionsExecuted++;
+          throw error; // Propagate the detailed error
+        }
 
-        // Record action
+        // Record successful action
         actionHistory.push({
           timestamp: Date.now(),
           action: action.type,
@@ -220,70 +235,77 @@ export class AINavigator {
 
   /**
    * Execute an action via MCP client
+   * Throws on error to propagate detailed error messages
    */
-  private async executeAction(action: LLMAction, mcpClient: MCPClient): Promise<boolean> {
-    try {
-      switch (action.type) {
-        case 'tap':
-          if ('element_id' in action.params && typeof action.params.element_id === 'string') {
-            await mcpClient.tap(action.params.element_id);
-          } else if (
-            'x' in action.params &&
-            'y' in action.params &&
-            typeof action.params.x === 'number' &&
-            typeof action.params.y === 'number'
-          ) {
-            await mcpClient.tapCoordinates(action.params.x, action.params.y);
-          }
-          break;
+  private async executeAction(action: LLMAction, mcpClient: MCPClient): Promise<void> {
+    switch (action.type) {
+      case 'tap':
+        if ('element_id' in action.params && typeof action.params.element_id === 'string') {
+          await mcpClient.tap(action.params.element_id);
+        } else if (
+          'x' in action.params &&
+          'y' in action.params &&
+          typeof action.params.x === 'number' &&
+          typeof action.params.y === 'number'
+        ) {
+          await mcpClient.tapCoordinates(action.params.x, action.params.y);
+        } else {
+          throw new Error(`Invalid tap action parameters: ${JSON.stringify(action.params)}`);
+        }
+        break;
 
-        case 'type':
-          if ('text' in action.params && typeof action.params.text === 'string') {
-            await mcpClient.type(action.params.text);
-          }
-          break;
+      case 'type':
+        if ('text' in action.params && typeof action.params.text === 'string') {
+          await mcpClient.type(action.params.text);
+        } else {
+          throw new Error(`Invalid type action parameters: ${JSON.stringify(action.params)}`);
+        }
+        break;
 
-        case 'scroll':
-          if ('direction' in action.params) {
-            await mcpClient.scroll(
-              action.params.direction as 'up' | 'down' | 'left' | 'right',
-              action.params.amount as number | undefined
-            );
-          }
-          break;
+      case 'scroll':
+        if ('direction' in action.params) {
+          await mcpClient.scroll(
+            action.params.direction as 'up' | 'down' | 'left' | 'right',
+            action.params.amount as number | undefined
+          );
+        } else {
+          throw new Error(`Invalid scroll action parameters: ${JSON.stringify(action.params)}`);
+        }
+        break;
 
-        case 'swipe':
-          if (
-            'startX' in action.params &&
-            'startY' in action.params &&
-            'endX' in action.params &&
-            'endY' in action.params
-          ) {
-            await mcpClient.swipe(
-              action.params.startX as number,
-              action.params.startY as number,
-              action.params.endX as number,
-              action.params.endY as number
-            );
-          }
-          break;
+      case 'swipe':
+        if (
+          'startX' in action.params &&
+          'startY' in action.params &&
+          'endX' in action.params &&
+          'endY' in action.params
+        ) {
+          await mcpClient.swipe(
+            action.params.startX as number,
+            action.params.startY as number,
+            action.params.endX as number,
+            action.params.endY as number
+          );
+        } else {
+          throw new Error(`Invalid swipe action parameters: ${JSON.stringify(action.params)}`);
+        }
+        break;
 
-        case 'press_button':
-          if ('button' in action.params) {
-            await mcpClient.pressButton(action.params.button as 'home' | 'back');
-          }
-          break;
+      case 'press_button':
+        if ('button' in action.params) {
+          await mcpClient.pressButton(action.params.button as 'home' | 'back');
+        } else {
+          throw new Error(`Invalid press_button action parameters: ${JSON.stringify(action.params)}`);
+        }
+        break;
 
-        case 'wait':
-          const duration = (action.params.duration as number) ?? 1000;
-          await new Promise((resolve) => setTimeout(resolve, duration));
-          break;
-      }
+      case 'wait':
+        const duration = (action.params.duration as number) ?? 1000;
+        await new Promise((resolve) => setTimeout(resolve, duration));
+        break;
 
-      return true;
-    } catch (error) {
-      console.error(`Action execution failed: ${error}`);
-      return false;
+      default:
+        throw new Error(`Unknown action type: ${action.type}`);
     }
   }
 
