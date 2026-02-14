@@ -52,8 +52,20 @@ export async function initCommand(options: InitOptions): Promise<void> {
 
   // Get available devices
   const devices = await deviceManager.listDevices();
-  const iphones = devices.filter((d) => d.deviceType === 'iPhone');
-  const ipads = devices.filter((d) => d.deviceType === 'iPad');
+
+  // Sort devices: booted first, then by name
+  const sortDevices = (devs: typeof devices) => {
+    return devs.sort((a, b) => {
+      // Booted devices come first
+      if (a.state === 'Booted' && b.state !== 'Booted') return -1;
+      if (a.state !== 'Booted' && b.state === 'Booted') return 1;
+      // Then sort alphabetically by name
+      return a.name.localeCompare(b.name);
+    });
+  };
+
+  const iphones = sortDevices(devices.filter((d) => d.deviceType === 'iPhone'));
+  const ipads = sortDevices(devices.filter((d) => d.deviceType === 'iPad'));
 
   if (iphones.length === 0 || ipads.length === 0) {
     console.log(chalk.yellow('Warning: Not enough simulators found.'));
@@ -148,14 +160,24 @@ export async function initCommand(options: InitOptions): Promise<void> {
         type: 'list',
         name: 'iphone',
         message: 'Select iPhone simulator:',
-        choices: iphones.map((d) => ({ name: d.name, value: d.name })),
+        choices: iphones.map((d) => ({
+          name: d.state === 'Booted'
+            ? `${chalk.green('●')} ${d.name} ${chalk.dim('(booted)')}`
+            : `${chalk.dim('○')} ${d.name}`,
+          value: d.name,
+        })),
         default: 0,
       },
       {
         type: 'list',
         name: 'ipad',
         message: 'Select iPad simulator:',
-        choices: ipads.map((d) => ({ name: d.name, value: d.name })),
+        choices: ipads.map((d) => ({
+          name: d.state === 'Booted'
+            ? `${chalk.green('●')} ${d.name} ${chalk.dim('(booted)')}`
+            : `${chalk.dim('○')} ${d.name}`,
+          value: d.name,
+        })),
         default: 0,
       },
       {
