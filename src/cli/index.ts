@@ -52,7 +52,8 @@ program
 program
   .command('run')
   .description('Execute flow and capture screenshots')
-  .option('--flow <path>', 'Path to flow YAML file')
+  .option('--config <path>', 'Path to config YAML file (default: aperture.config.yaml)')
+  .option('--flow <path>', 'Path to flow YAML file (overrides config)')
   .option('--locale <locale>', 'Run for a single locale only')
   .option('--device <type>', 'Run for specific device (iphone|ipad|both)', 'both')
   .option('--dry-run', 'Show planned actions without executing')

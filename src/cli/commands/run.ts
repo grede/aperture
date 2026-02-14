@@ -15,6 +15,7 @@ import { LocaleManager } from '../../core/locale-manager.js';
 import type { ApertureConfig, FlowDefinition, LocaleData } from '../../types/index.js';
 
 interface RunOptions {
+  config?: string;
   flow?: string;
   locale?: string;
   device?: 'iphone' | 'ipad' | 'both';
@@ -43,24 +44,17 @@ async function commandExists(command: string): Promise<boolean> {
 export async function runCommand(options: RunOptions): Promise<void> {
   const startTime = Date.now();
 
-  // Check for mobile-mcp before proceeding
-  const hasMobileMcp = await commandExists('mcp-server-mobile');
-
-  if (!hasMobileMcp) {
-    console.error(chalk.red('\n✗ mcp-server-mobile not found in PATH\n'));
-    console.log(chalk.yellow('@mobilenext/mobile-mcp is required to control iOS Simulators.\n'));
-    console.log(chalk.dim('Run the following command to check and install dependencies:\n'));
-    console.log(chalk.cyan('  aperture doctor\n'));
-    process.exit(1);
-  }
-
   // Load config
-  const configPath = resolve(process.cwd(), 'aperture.config.yaml');
+  const configPath = resolve(process.cwd(), options.config || 'aperture.config.yaml');
   let config: ApertureConfig;
 
   try {
     const configContent = await readFile(configPath, 'utf-8');
     config = YAML.parse(configContent) as ApertureConfig;
+
+    if (options.config) {
+      console.log(chalk.dim(`Using config: ${configPath}\n`));
+    }
 
     // Resolve environment variables
     if (config.llm.apiKey.startsWith('${')) {
@@ -99,7 +93,8 @@ export async function runCommand(options: RunOptions): Promise<void> {
       chalk.red('Error loading config:'),
       error instanceof Error ? error.message : error
     );
-    console.log(chalk.dim(`\nRun ${chalk.cyan('aperture init')} to create a configuration.\n`));
+    console.log(chalk.dim(`\nConfig file: ${configPath}`));
+    console.log(chalk.dim(`Run ${chalk.cyan('aperture init')} to create a configuration.\n`));
     process.exit(1);
   }
 
