@@ -61,6 +61,7 @@ export interface Guardrails {
   runTimeoutMs: number;
   forbiddenActions: string[];
   costCapUsd: number;
+  noProgressThreshold: number; // Number of consecutive actions with no screen change before triggering vision fallback
 }
 
 // ── Device Manager Types ───────────────────────────────────────
@@ -120,6 +121,7 @@ export interface ApertureConfig {
     runTimeoutSec: number;
     costCapUsd: number;
     forbiddenActions: string[];
+    noProgressThreshold?: number; // Optional: defaults to 5 if not specified
   };
   llm: {
     apiKey: string;

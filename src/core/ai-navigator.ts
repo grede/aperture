@@ -121,9 +121,10 @@ export class AINavigator {
         if (previousTreeHash === newTreeHash) {
           noProgressCount++;
 
-          // After 2 failed attempts with no progress, trigger vision fallback
-          if (noProgressCount === 2 && !visionContext) {
-            console.log('[Vision Fallback] No progress after 2 attempts, analyzing screenshot...');
+          // Trigger vision fallback before final attempt
+          const visionTriggerThreshold = guardrails.noProgressThreshold - 1;
+          if (noProgressCount === visionTriggerThreshold && !visionContext) {
+            console.log(`[Vision Fallback] No progress after ${visionTriggerThreshold} attempts, analyzing screenshot...`);
             try {
               const screenshot = await provider.takeScreenshot();
               const screenshotBase64 = screenshot.toString('base64');
@@ -144,9 +145,9 @@ export class AINavigator {
             }
           }
 
-          if (noProgressCount >= 3) {
+          if (noProgressCount >= guardrails.noProgressThreshold) {
             throw new Error(
-              `No screen changes detected after 3 consecutive actions. The UI may not be responding to clicks, or the target element is not accessible. Last action: ${action.type} with params ${JSON.stringify(action.params)}`
+              `No screen changes detected after ${guardrails.noProgressThreshold} consecutive actions. The UI may not be responding to clicks, or the target element is not accessible. Last action: ${action.type} with params ${JSON.stringify(action.params)}`
             );
           }
         } else {
@@ -399,6 +400,11 @@ CRITICAL RULES:
 2. If previous attempts failed and vision is now available → MUST try vision coordinates
 3. Don't repeat the same failed action - if you tapped wrong coords, use vision
 4. If stuck after 2 attempts, you'll get vision - pay attention to it!
+5. SCROLLABLE CONTENT: Many screens have scrollable content below the fold
+   - If you can't find a button/element you're looking for (e.g., "Save", "Create", "Submit")
+   - Try scrolling DOWN to see if it's below the visible area
+   - Forms often have submit buttons at the bottom that require scrolling
+   - Don't give up until you've checked by scrolling down!
 
 Respond with JSON:
 {

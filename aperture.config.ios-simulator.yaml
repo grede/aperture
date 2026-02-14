@@ -32,6 +32,7 @@ guardrails:
   runTimeoutSec: 1800
   costCapUsd: 5
   forbiddenActions: []
+  noProgressThreshold: 5  # Stop after N actions with no screen change (default: 5)
 
 llm:
   apiKey: ${OPENAI_API_KEY}

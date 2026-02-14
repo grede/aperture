@@ -294,6 +294,7 @@ export async function runCommand(options: RunOptions): Promise<void> {
                   runTimeoutMs: config.guardrails.runTimeoutSec * 1000,
                   forbiddenActions: config.guardrails.forbiddenActions,
                   costCapUsd: config.guardrails.costCapUsd,
+                  noProgressThreshold: config.guardrails.noProgressThreshold ?? 5,
                 }
               );
 
@@ -323,6 +324,7 @@ export async function runCommand(options: RunOptions): Promise<void> {
                   runTimeoutMs: config.guardrails.runTimeoutSec * 1000,
                   forbiddenActions: config.guardrails.forbiddenActions,
                   costCapUsd: config.guardrails.costCapUsd,
+                  noProgressThreshold: config.guardrails.noProgressThreshold ?? 5,
                 }
               );
 
@@ -366,6 +368,8 @@ export async function runCommand(options: RunOptions): Promise<void> {
             console.error(
               chalk.red(`    Error: ${error instanceof Error ? error.message : error}`)
             );
+            // Stop execution on step failure - don't continue to next step
+            throw error;
           }
         }
 
