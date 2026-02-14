@@ -11,6 +11,10 @@ const FlowStepSchema = z.union([
     instruction: z.string().min(1, 'Instruction cannot be empty'),
   }),
   z.object({
+    action: z.literal('action'),
+    instruction: z.string().min(1, 'Instruction cannot be empty'),
+  }),
+  z.object({
     action: z.literal('screenshot'),
     label: z.string().min(1, 'Label cannot be empty'),
   }),
@@ -93,6 +97,11 @@ export class FlowParser {
             ...step,
             instruction: this.replaceVariables(step.instruction, variables),
           };
+        case 'action':
+          return {
+            ...step,
+            instruction: this.replaceVariables(step.instruction, variables),
+          };
         case 'type':
           return {
             ...step,
@@ -132,6 +141,9 @@ export class FlowParser {
 
       switch (step.action) {
         case 'navigate':
+          text = step.instruction;
+          break;
+        case 'action':
           text = step.instruction;
           break;
         case 'type':
