@@ -1,12 +1,14 @@
 import type { IMobileAutomationProvider, ProviderConfig } from './mobile-automation-provider.js';
 import { MobileMCPProvider } from './mobile-mcp-provider.js';
+import { IOSSimulatorMCPProvider } from './ios-simulator-mcp-provider.js';
 
 /**
  * Registry of available mobile automation providers
  */
 const PROVIDER_REGISTRY: Record<string, new () => IMobileAutomationProvider> = {
   'mobile-mcp': MobileMCPProvider,
-  'mcp-server-mobile': MobileMCPProvider, // Alias for the same provider
+  'mcp-server-mobile': MobileMCPProvider, // Alias
+  'ios-simulator-mcp': IOSSimulatorMCPProvider,
   // Future providers can be added here:
   // 'appium': AppiumProvider,
   // 'maestro': MaestroProvider,

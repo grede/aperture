@@ -107,10 +107,31 @@ The abstraction is transparent to end users. Configuration remains the same:
 ```yaml
 # aperture.config.yaml
 mcp:
-  endpoint: stdio://mcp-server-mobile
+  endpoint: stdio://mcp-server-mobile  # Uses mobile-mcp (WebDriverAgent)
+```
+
+Or try the alternative provider:
+
+```yaml
+# aperture.config.yaml
+mcp:
+  endpoint: stdio://ios-simulator-mcp  # Uses ios-simulator-mcp (native idb)
 ```
 
 The provider type is auto-detected from the endpoint string.
+
+### Available Providers
+
+**1. mobile-mcp (mcp-server-mobile)**
+- Backend: WebDriverAgent
+- Best for: React Native apps with accessibility labels
+- Install: `npm install -g @mobilenext/mobile-mcp`
+
+**2. ios-simulator-mcp**
+- Backend: iOS Debug Bridge (idb)
+- Best for: Native iOS apps, coordinate-based automation, apps without accessibility labels
+- Install: `npm install -g ios-simulator-mcp` or use `npx` (no installation)
+- **Key advantage**: Native iOS accessibility tapping may work better with React Native buttons that don't respond to WebDriverAgent
 
 ### Programmatic Usage
 

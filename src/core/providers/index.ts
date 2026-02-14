@@ -16,6 +16,7 @@ export { UnsupportedOperationError } from './mobile-automation-provider.js';
 
 // Provider implementations
 export { MobileMCPProvider } from './mobile-mcp-provider.js';
+export { IOSSimulatorMCPProvider } from './ios-simulator-mcp-provider.js';
 
 // Factory
 export {

@@ -414,7 +414,11 @@ See `src/core/providers/README.md` for detailed instructions. Brief steps:
 3. Export from `index.ts`
 4. Use via config `endpoint`
 
-Example providers that could be added:
+Available providers:
+- **mobile-mcp** (`@mobilenext/mobile-mcp`): WebDriverAgent-based, best for React Native with accessibility labels
+- **ios-simulator-mcp** (`ios-simulator-mcp`): iOS Debug Bridge (idb), native tapping, better for apps without accessibility props
+
+Future providers that could be added:
 - Different MCP servers (playwright-mcp, puppeteer-mcp)
 - Appium WebDriver
 - Maestro

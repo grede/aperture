@@ -1,0 +1,53 @@
+# Aperture Configuration - iOS Simulator MCP Provider
+#
+# This config uses ios-simulator-mcp instead of mobile-mcp for iOS automation.
+# ios-simulator-mcp may work better with React Native apps that don't have
+# proper accessibility props (testID, accessibilityLabel).
+#
+# To use this config:
+#   1. Install: npm install -g ios-simulator-mcp
+#   2. Run: aperture run --config aperture.config.ios-simulator.yaml
+#
+# Or use npx (no installation needed):
+#   aperture run --config aperture.config.ios-simulator.yaml
+
+app: ./test_project/splitie.app
+bundleId: com.example.myapp
+flow: ./test_project/aperture-flow.yaml
+
+locales:
+  - en-US
+
+devices:
+  iphone: iPhone 17 Pro Max
+
+template:
+  style: minimal
+
+output: ./aperture-output
+
+guardrails:
+  maxActionsPerStep: 10
+  stepTimeoutSec: 120
+  runTimeoutSec: 1800
+  costCapUsd: 5
+  forbiddenActions: []
+
+llm:
+  apiKey: ${OPENAI_API_KEY}
+  defaultModel: gpt-5-mini
+  escalationModel: gpt-5.1
+  escalateAfterAttempts: 5
+
+# Provider Configuration
+# Using ios-simulator-mcp for native iOS accessibility tapping
+# This provider uses iOS Debug Bridge (idb) instead of WebDriverAgent
+mcp:
+  endpoint: stdio://ios-simulator-mcp
+
+# Key Differences from mobile-mcp:
+# ✅ Native iOS accessibility tapping (better React Native support)
+# ✅ Built-in app install/launch support
+# ✅ Faster connection (no WDA startup)
+# ⚠️ Text input limited to ASCII characters only
+# ⚠️ No button press support (use DeviceManager fallback)

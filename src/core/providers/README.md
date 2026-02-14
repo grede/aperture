@@ -100,8 +100,33 @@ mcp:
 ```
 
 The provider type is extracted from the endpoint:
-- `stdio://mcp-server-mobile` → `mobile-mcp` provider
+- `stdio://mcp-server-mobile` → `mobile-mcp` provider (WebDriverAgent-based)
+- `stdio://ios-simulator-mcp` → `ios-simulator-mcp` provider (idb-based)
 - `stdio://appium` → `appium` provider (future)
+
+### Choosing a Provider
+
+**Use `mobile-mcp` (mcp-server-mobile) when:**
+- Working with React Native apps (WebDriverAgent integration)
+- Need full WebDriverAgent feature set
+- App has proper accessibility labels
+
+**Use `ios-simulator-mcp` when:**
+- Native iOS apps or apps with accessibility issues
+- Need app lifecycle control (install, launch)
+- Working with coordinate-based automation
+- React Native buttons without accessibility props (better native tap support)
+
+**Installation:**
+
+```bash
+# For mobile-mcp
+npm install -g @mobilenext/mobile-mcp
+
+# For ios-simulator-mcp
+npm install -g ios-simulator-mcp
+# Or use npx (no installation needed)
+```
 
 ## Adding a New Provider
 
@@ -241,16 +266,18 @@ This allows callers to gracefully fall back to alternative methods.
 
 ## Provider Comparison
 
-| Feature | MobileMCP | Appium (Future) | Maestro (Future) |
-|---------|-----------|-----------------|------------------|
-| Accessibility Tree | ✅ Yes | ✅ Yes | ✅ Yes |
-| Element Tap | ❌ No | ✅ Yes | ✅ Yes |
-| Coordinate Tap | ✅ AppleScript | ✅ Native | ✅ Native |
-| Screenshot | ✅ Yes | ✅ Yes | ✅ Yes |
-| Type Text | ✅ Yes | ✅ Yes | ✅ Yes |
-| Scroll/Swipe | ✅ Yes | ✅ Yes | ✅ Yes |
-| App Lifecycle | ❌ No | ✅ Yes | ✅ Yes |
-| Button Press | ❌ No | ✅ Yes | ✅ Yes |
+| Feature | MobileMCP | IOSSimulatorMCP | Appium (Future) | Maestro (Future) |
+|---------|-----------|-----------------|-----------------|------------------|
+| Accessibility Tree | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| Element Tap | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
+| Coordinate Tap | ✅ AppleScript | ✅ Native idb | ✅ Native | ✅ Native |
+| Screenshot | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| Type Text | ✅ Yes | ✅ ASCII only | ✅ Yes | ✅ Yes |
+| Scroll/Swipe | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| App Lifecycle | ❌ No | ✅ Install/Launch | ✅ Yes | ✅ Yes |
+| Button Press | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
+| Backend | WebDriverAgent | iOS Debug Bridge | WDA/XCUITest | Custom |
+| Best For | React Native | Native iOS apps | Cross-platform | React Native |
 
 ## Testing
 
