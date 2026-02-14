@@ -50,11 +50,12 @@ export class MCPClient {
     this.ensureConnected();
     this.deviceUdid = udid;
 
-    // Initialize mobile-mcp for iOS simulator
+    // Initialize mobile-mcp for iOS simulator with WebDriverAgent
     await this.callTool('mobile_init', {
       platform: 'ios',
       device_id: udid,
-      udid: udid
+      udid: udid,
+      wda_url: 'http://localhost:8100'
     });
   }
 

@@ -229,7 +229,19 @@ export async function runCommand(options: RunOptions): Promise<void> {
         // Set status bar
         await deviceManager.setStatusBar(device.udid);
 
-        // Install and launch app
+        // Ensure WebDriverAgent is running BEFORE installing app
+        const wdaSpinner = ora('Checking WebDriverAgent...').start();
+        const wdaRunning = await deviceManager.isWebDriverAgentRunning();
+
+        if (wdaRunning) {
+          wdaSpinner.succeed('WebDriverAgent already running');
+        } else {
+          wdaSpinner.text = `Starting WebDriverAgent on ${deviceName}...`;
+          await deviceManager.ensureWebDriverAgentRunning(device.udid);
+          wdaSpinner.succeed('WebDriverAgent started and ready');
+        }
+
+        // Now install and launch app
         const appSpinner = ora('Installing app...').start();
         await deviceManager.install(device.udid, resolve(process.cwd(), config.app));
 
@@ -237,19 +249,7 @@ export async function runCommand(options: RunOptions): Promise<void> {
         await deviceManager.launch(device.udid, bundleId);
         appSpinner.succeed('App launched');
 
-        // Ensure WebDriverAgent is running
-        const wdaSpinner = ora('Checking WebDriverAgent...').start();
-        const wdaRunning = await deviceManager.isWebDriverAgentRunning();
-
-        if (wdaRunning) {
-          wdaSpinner.succeed('WebDriverAgent already running');
-        } else {
-          wdaSpinner.text = `Starting WebDriverAgent for ${deviceName}...`;
-          await deviceManager.ensureWebDriverAgentRunning(deviceName);
-          wdaSpinner.succeed('WebDriverAgent started');
-        }
-
-        // Connect to MCP
+        // Connect to MCP (WebDriverAgent must be running first)
         const mcpSpinner = ora('Connecting to MCP server...').start();
         await mcpClient.connect(config.mcp.endpoint);
         mcpSpinner.text = 'Initializing iOS simulator in MCP...';

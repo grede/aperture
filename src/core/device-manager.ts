@@ -167,26 +167,26 @@ export class DeviceManager {
   }
 
   /**
-   * Check if WebDriverAgent is running on the default port (8100)
+   * Check if WebDriverAgent is running and responding on port 8100
    */
   async isWebDriverAgentRunning(): Promise<boolean> {
     try {
-      // Check if port 8100 is listening (WDA's default port)
-      const { stdout } = await execAsync('lsof -i :8100 -P -n -sTCP:LISTEN');
-      return stdout.includes('8100');
+      // Try to fetch the status endpoint
+      const response = await fetch('http://localhost:8100/status');
+      return response.ok;
     } catch {
       return false;
     }
   }
 
   /**
-   * Start WebDriverAgent for a specific device
+   * Start WebDriverAgent for a specific device UDID
    * Returns the child process (caller should keep it alive)
    */
-  async startWebDriverAgent(deviceName: string): Promise<ChildProcess> {
+  async startWebDriverAgent(udid: string): Promise<ChildProcess> {
     const wdaPath = join(homedir(), 'WebDriverAgent');
 
-    // Start WDA in test mode (keeps running)
+    // Start WDA in test mode using UDID (keeps running and serves HTTP API)
     const proc = spawn(
       'xcodebuild',
       [
@@ -195,18 +195,18 @@ export class DeviceManager {
         '-scheme',
         'WebDriverAgentRunner',
         '-destination',
-        `platform=iOS Simulator,name=${deviceName}`,
+        `id=${udid}`,
         'test',
       ],
       {
         cwd: wdaPath,
         detached: true,
-        stdio: 'ignore', // Don't inherit stdio, run completely in background
+        stdio: ['ignore', 'pipe', 'pipe'], // Capture stdout/stderr for debugging
       }
     );
 
-    // Unref so parent process can exit without waiting for WDA
-    proc.unref();
+    // Don't unref - we want to keep reference to monitor it
+    // But use detached so it can continue running
 
     return proc;
   }
@@ -215,32 +215,33 @@ export class DeviceManager {
    * Wait for WebDriverAgent to be ready
    * Polls the HTTP endpoint until it responds
    */
-  async waitForWebDriverAgent(maxWaitMs = 60000): Promise<void> {
+  async waitForWebDriverAgent(maxWaitMs = 90000): Promise<void> {
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitMs) {
       if (await this.isWebDriverAgentRunning()) {
-        // Give it a moment to fully initialize
-        await new Promise((resolve) => setTimeout(resolve, 2000));
         return;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
-    throw new Error(`WebDriverAgent failed to start within ${maxWaitMs}ms`);
+    throw new Error(`WebDriverAgent failed to start within ${maxWaitMs / 1000}s`);
   }
 
   /**
-   * Ensure WebDriverAgent is running for the specified device
+   * Ensure WebDriverAgent is running for the specified device UDID
    * Starts it if not already running
    */
-  async ensureWebDriverAgentRunning(deviceName: string): Promise<void> {
+  async ensureWebDriverAgentRunning(udid: string): Promise<ChildProcess | null> {
     const isRunning = await this.isWebDriverAgentRunning();
 
     if (!isRunning) {
-      await this.startWebDriverAgent(deviceName);
+      const proc = await this.startWebDriverAgent(udid);
       await this.waitForWebDriverAgent();
+      return proc;
     }
+
+    return null;
   }
 }
