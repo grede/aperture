@@ -1,0 +1,45 @@
+# Aperture Configuration Example
+# Copy this to aperture.config.yaml and customize for your project
+
+app: ./build/MyApp.app
+bundleId: com.example.myapp
+flow: ./aperture-flow.yaml
+
+# Target locales for screenshot generation
+locales:
+  - en-US
+  - de
+  - ja
+  - pt-BR
+  - ar
+
+# Device simulators to use
+devices:
+  iphone: "iPhone 15 Pro Max"
+  ipad: "iPad Pro (13-inch) (M4)"
+
+# Template style for final export
+template:
+  style: modern # minimal | modern | gradient | dark | playful
+
+# Output directory for screenshots
+output: ./aperture-output
+
+# Safety guardrails
+guardrails:
+  maxActionsPerStep: 10
+  stepTimeoutSec: 60
+  runTimeoutSec: 600
+  costCapUsd: 5.00
+  forbiddenActions: []
+
+# LLM configuration
+llm:
+  apiKey: ${OPENAI_API_KEY} # Set via environment variable
+  defaultModel: gpt-4o-mini
+  escalationModel: gpt-4o
+  escalateAfterAttempts: 5
+
+# MCP server endpoint
+mcp:
+  endpoint: stdio://mobile-mcp

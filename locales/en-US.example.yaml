@@ -1,0 +1,7 @@
+# English (US) locale data
+# Variables used in aperture-flow.yaml
+
+user_name: "John Smith"
+group_name: "Family Group"
+search_query: "Search messages"
+email: "john.smith@example.com"

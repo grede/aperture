@@ -1,0 +1,54 @@
+# Aperture Flow Example
+# Define the sequence of actions to capture your app's screenshots
+
+app: ./build/MyApp.app
+
+steps:
+  # 1. Dismiss any onboarding or debug menus
+  - action: navigate
+    instruction: "Dismiss any onboarding dialogs, Expo dev menus, or debug overlays and get to the main screen"
+
+  # 2. Navigate to the main screen
+  - action: navigate
+    instruction: "Navigate to the main screen showing the list of items"
+
+  # 3. Take a screenshot
+  - action: screenshot
+    label: "main_screen"
+
+  # 4. Navigate to a detail view
+  - action: navigate
+    instruction: "Open the first item in the list"
+
+  # 5. Take another screenshot
+  - action: screenshot
+    label: "detail_view"
+
+  # 6. Navigate to settings
+  - action: navigate
+    instruction: "Go back to the main screen and open the settings"
+
+  # 7. Type some text (using a variable)
+  - action: type
+    text: "{{user_name}}"
+
+  # 8. Take settings screenshot
+  - action: screenshot
+    label: "settings"
+
+  # 9. Wait for an animation to complete
+  - action: wait
+    duration: 2000
+
+  # 10. Navigate to another screen
+  - action: navigate
+    instruction: "Open the profile screen"
+
+  # 11. Final screenshot
+  - action: screenshot
+    label: "profile"
+
+# Variables like {{user_name}} are resolved from locales/{locale}.yaml files
+# Example locales/de.yaml:
+#   user_name: "Müller"
+#   group_name: "Familiengruppe"

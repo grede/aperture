@@ -1,0 +1,7 @@
+# German locale data
+# Variables used in aperture-flow.yaml
+
+user_name: "Hans Müller"
+group_name: "Familiengruppe"
+search_query: "Nachrichten suchen"
+email: "hans.mueller@example.com"
