@@ -8,6 +8,7 @@ export class MCPClient {
   private client: Client | null = null;
   private transport: StdioClientTransport | null = null;
   private connected = false;
+  private deviceUdid: string | null = null;
 
   /**
    * Connect to the MCP server
@@ -40,14 +41,21 @@ export class MCPClient {
     // Connect
     await this.client.connect(this.transport);
     this.connected = true;
+  }
 
-    // Initialize mobile device
-    try {
-      await this.callTool('mobile_init', {});
-    } catch (error) {
-      // mobile_init might not be required, ignore if it fails
-      console.warn('mobile_init failed (may not be required):', error);
-    }
+  /**
+   * Initialize mobile device for iOS simulator
+   */
+  async initializeDevice(udid: string): Promise<void> {
+    this.ensureConnected();
+    this.deviceUdid = udid;
+
+    // Initialize mobile-mcp for iOS simulator
+    await this.callTool('mobile_init', {
+      platform: 'ios',
+      device_id: udid,
+      udid: udid
+    });
   }
 
   /**

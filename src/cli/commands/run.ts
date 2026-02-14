@@ -240,7 +240,9 @@ export async function runCommand(options: RunOptions): Promise<void> {
         // Connect to MCP
         const mcpSpinner = ora('Connecting to MCP server...').start();
         await mcpClient.connect(config.mcp.endpoint);
-        mcpSpinner.succeed('MCP connected');
+        mcpSpinner.text = 'Initializing iOS simulator in MCP...';
+        await mcpClient.initializeDevice(device.udid);
+        mcpSpinner.succeed('MCP connected and initialized for iOS');
 
         // Execute flow
         const outputDir = join(config.output, locale, deviceType);
