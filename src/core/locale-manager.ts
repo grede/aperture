@@ -82,23 +82,37 @@ export class LocaleManager {
     const plistPath = `${homeDir}/Library/Preferences/.GlobalPreferences.plist`;
 
     try {
-      // Read existing plist (or create new one)
-      let preferences: Record<string, unknown> = {};
-
+      // Check if plist exists, create if needed
       try {
-        const plistContent = await readFile(plistPath, 'utf-8');
-        preferences = plist.parse(plistContent) as Record<string, unknown>;
-      } catch (error) {
-        // Plist doesn't exist yet, start with empty preferences
+        await readFile(plistPath);
+      } catch {
+        // Plist doesn't exist, create a minimal one
+        const minimal = plist.build({
+          AppleLanguages: [locale],
+          AppleLocale: locale,
+        } as any);
+        await writeFile(plistPath, minimal);
+
+        // Convert to binary format for consistency with iOS
+        await execAsync(`plutil -convert binary1 "${plistPath}"`);
       }
 
-      // Set AppleLanguages and AppleLocale
-      preferences.AppleLanguages = [locale];
-      preferences.AppleLocale = locale;
+      // Use plutil to update locale values (handles both binary and XML)
+      // First, ensure the plist has an AppleLanguages array
+      try {
+        await execAsync(`plutil -replace AppleLanguages -json '["${locale}"]' "${plistPath}"`);
+      } catch {
+        // Array might not exist, create it
+        await execAsync(`plutil -insert AppleLanguages -json '["${locale}"]' "${plistPath}"`);
+      }
 
-      // Write back to plist
-      const updatedPlist = plist.build(preferences as any);
-      await writeFile(plistPath, updatedPlist);
+      // Set AppleLocale
+      try {
+        await execAsync(`plutil -replace AppleLocale -string "${locale}" "${plistPath}"`);
+      } catch {
+        // Key might not exist, create it
+        await execAsync(`plutil -insert AppleLocale -string "${locale}" "${plistPath}"`);
+      }
 
       // Reboot the Simulator for changes to take effect
       await this.deviceManager.shutdown(udid);
@@ -126,17 +140,15 @@ export class LocaleManager {
     const plistPath = `${homeDir}/Library/Preferences/.GlobalPreferences.plist`;
 
     try {
-      const plistContent = await readFile(plistPath, 'utf-8');
-      const preferences = plist.parse(plistContent) as Record<string, unknown>;
+      // Use plutil to extract the first AppleLanguage value (handles binary plists)
+      const { stdout } = await execAsync(
+        `plutil -extract AppleLanguages.0 raw -o - "${plistPath}"`
+      );
 
-      if (Array.isArray(preferences.AppleLanguages) && preferences.AppleLanguages.length > 0) {
-        return preferences.AppleLanguages[0] as string;
-      }
-
-      // Default to en-US if not set
-      return 'en-US';
+      const locale = stdout.trim();
+      return locale || 'en-US';
     } catch (error) {
-      // Plist doesn't exist or can't be read, assume en-US
+      // Plist doesn't exist or AppleLanguages not set, assume en-US
       return 'en-US';
     }
   }

@@ -135,12 +135,27 @@ export class DeviceManager {
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitMs) {
-      const { stdout } = await execAsync(`xcrun simctl bootstatus ${udid} -b`);
+      // First check device state directly (more reliable)
+      const devices = await this.listDevices();
+      const device = devices.find((d) => d.udid === udid);
 
-      if (stdout.includes('Boot status: Booted')) {
+      if (device && device.state === 'Booted') {
         // Give it a few more seconds to fully initialize
         await new Promise((resolve) => setTimeout(resolve, 3000));
         return;
+      }
+
+      // Also check bootstatus output for completion messages
+      try {
+        const { stdout } = await execAsync(`xcrun simctl bootstatus ${udid} -b`, { timeout: 2000 });
+
+        if (stdout.includes('Boot status: Booted') || stdout.includes('Device already booted')) {
+          // Give it a few more seconds to fully initialize
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          return;
+        }
+      } catch (error) {
+        // bootstatus might fail/timeout during boot, continue polling
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
