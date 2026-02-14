@@ -7,7 +7,8 @@ import inquirer from 'inquirer';
 import YAML from 'yaml';
 import { FlowParser } from '../../core/flow-parser.js';
 import { DeviceManager } from '../../core/device-manager.js';
-import { MCPClient } from '../../core/mcp-client.js';
+import { ProviderFactory } from '../../core/providers/index.js';
+import type { IMobileAutomationProvider } from '../../core/providers/index.js';
 import { AINavigator } from '../../core/ai-navigator.js';
 import { CostTracker } from '../../core/cost-tracker.js';
 import { LocaleManager } from '../../core/locale-manager.js';
@@ -150,7 +151,6 @@ export async function runCommand(options: RunOptions): Promise<void> {
   // Initialize core components
   const deviceManager = new DeviceManager();
   const localeManager = new LocaleManager(deviceManager);
-  const mcpClient = new MCPClient();
   const costTracker = new CostTracker();
   const aiNavigator = new AINavigator(
     config.llm.apiKey,
@@ -158,6 +158,10 @@ export async function runCommand(options: RunOptions): Promise<void> {
     config.llm.escalationModel,
     config.llm.escalateAfterAttempts
   );
+
+  // Create mobile automation provider (e.g., mobile-mcp, appium, maestro)
+  // The provider is determined from the endpoint in config
+  let provider: IMobileAutomationProvider | null = null;
 
   // Main execution loop
   for (const locale of locales) {
@@ -212,12 +216,14 @@ export async function runCommand(options: RunOptions): Promise<void> {
 
         // Check current locale and set if different from target
         const localeSpinner = ora(`Verifying locale ${locale}...`).start();
+        let didReboot = false;
         try {
           const currentLocale = await localeManager.getCurrentLocale(device.udid);
 
           if (currentLocale !== locale) {
             localeSpinner.text = `Setting locale to ${locale} (current: ${currentLocale})...`;
             await localeManager.setLocale(device.udid, locale);
+            didReboot = true;
             localeSpinner.succeed(`Locale set to ${locale} (was: ${currentLocale})`);
           } else {
             localeSpinner.succeed(`Locale already set to ${locale}`);
@@ -226,20 +232,16 @@ export async function runCommand(options: RunOptions): Promise<void> {
           localeSpinner.warn(`Could not verify/set locale: ${error}`);
         }
 
+        // If we rebooted for locale change, wait for simulator to fully stabilize
+        if (didReboot) {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+
         // Set status bar
         await deviceManager.setStatusBar(device.udid);
 
-        // Ensure WebDriverAgent is running BEFORE installing app
-        const wdaSpinner = ora('Checking WebDriverAgent...').start();
-        const wdaRunning = await deviceManager.isWebDriverAgentRunning();
-
-        if (wdaRunning) {
-          wdaSpinner.succeed('WebDriverAgent already running');
-        } else {
-          wdaSpinner.text = `Starting WebDriverAgent on ${deviceName}...`;
-          await deviceManager.ensureWebDriverAgentRunning(device.udid);
-          wdaSpinner.succeed('WebDriverAgent started and ready');
-        }
+        // Don't manually start WebDriverAgent - let mobile-mcp handle it
+        // This avoids conflicts between our WDA process and mobile-mcp's WDA management
 
         // Now install and launch app
         const appSpinner = ora('Installing app...').start();
@@ -249,12 +251,22 @@ export async function runCommand(options: RunOptions): Promise<void> {
         await deviceManager.launch(device.udid, bundleId);
         appSpinner.succeed('App launched');
 
-        // Connect to MCP (WebDriverAgent must be running first)
-        const mcpSpinner = ora('Connecting to MCP server...').start();
-        await mcpClient.connect(config.mcp.endpoint);
-        mcpSpinner.text = 'Initializing iOS simulator in MCP...';
-        await mcpClient.initializeDevice(device.udid);
-        mcpSpinner.succeed('MCP connected and initialized for iOS');
+        // Connect to mobile automation provider (e.g., MCP server)
+        const providerSpinner = ora('Connecting to mobile automation provider...').start();
+
+        // Create provider from endpoint (auto-detects provider type)
+        const providerType = config.mcp.endpoint.replace('stdio://', '');
+        provider = ProviderFactory.create({
+          type: providerType,
+          endpoint: config.mcp.endpoint,
+        });
+
+        await provider.connect(config.mcp.endpoint);
+        providerSpinner.text = `Initializing iOS simulator (${provider.getProviderInfo().name})...`;
+
+        // Give provider time to start WebDriverAgent after locale changes
+        await provider.initializeDevice(device.udid);
+        providerSpinner.succeed(`Provider connected (${provider.getProviderInfo().name})`);
 
         // Execute flow
         const outputDir = join(config.output, locale, deviceType);
@@ -279,7 +291,7 @@ export async function runCommand(options: RunOptions): Promise<void> {
             if (step.action === 'navigate') {
               const result = await aiNavigator.navigate(
                 step.instruction,
-                mcpClient,
+                provider!,
                 costTracker,
                 {
                   maxActionsPerStep: config.guardrails.maxActionsPerStep,
@@ -308,7 +320,7 @@ export async function runCommand(options: RunOptions): Promise<void> {
             } else if (step.action === 'action') {
               const result = await aiNavigator.navigate(
                 step.instruction,
-                mcpClient,
+                provider!,
                 costTracker,
                 {
                   maxActionsPerStep: config.guardrails.maxActionsPerStep,
@@ -335,7 +347,7 @@ export async function runCommand(options: RunOptions): Promise<void> {
                 });
               }
             } else if (step.action === 'screenshot') {
-              const screenshot = await mcpClient.takeScreenshot();
+              const screenshot = await provider!.takeScreenshot();
               const screenshotPath = join(outputDir, `${step.label}.png`);
               await writeFile(screenshotPath, screenshot);
 
@@ -343,7 +355,7 @@ export async function runCommand(options: RunOptions): Promise<void> {
                 `[${stepNum}/${resolvedFlow.steps.length}] screenshot → ${screenshotPath}`
               );
             } else if (step.action === 'type') {
-              await mcpClient.type(step.text);
+              await provider!.type(step.text);
               stepSpinner.succeed(`[${stepNum}/${resolvedFlow.steps.length}] type`);
             } else if (step.action === 'wait') {
               const duration = step.duration ?? 1000;
@@ -363,7 +375,9 @@ export async function runCommand(options: RunOptions): Promise<void> {
         }
 
         // Cleanup
-        await mcpClient.disconnect();
+        if (provider) {
+          await provider.disconnect();
+        }
         await deviceManager.terminate(device.udid, bundleId);
 
         successfulRuns++;

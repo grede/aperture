@@ -14,15 +14,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 CLI (Commander.js)
-  ├── FlowParser          — YAML flow definitions → structured steps
-  ├── AINavigator         — LLM agent loop (observe → plan → act → verify)
-  ├── MCPClient           — iOS Simulator control via mobile-mcp server
-  ├── DeviceManager       — Simulator lifecycle (boot, install, launch via xcrun simctl)
-  ├── LocaleManager       — Locale switching (plist manipulation + reboot)
-  ├── TemplateEngine      — Sharp-based image compositing (device frames + marketing text)
-  ├── TranslationService  — Localized marketing copy generation (LLM)
-  └── LocaleDataGenerator — Culturally appropriate test data (LLM)
+  ├── FlowParser                  — YAML flow definitions → structured steps
+  ├── AINavigator                 — LLM agent loop (observe → plan → act → verify)
+  ├── Provider Abstraction Layer  — Pluggable mobile automation backends
+  │   ├── IMobileAutomationProvider (interface)
+  │   ├── MobileMCPProvider       — Adapter for @mobilenext/mobile-mcp
+  │   ├── ProviderFactory         — Provider creation and registry
+  │   └── (Future: Appium, Maestro, etc.)
+  ├── DeviceManager               — Simulator lifecycle (boot, install, launch via xcrun simctl)
+  ├── LocaleManager               — Locale switching (plist manipulation + reboot)
+  ├── TemplateEngine              — Sharp-based image compositing (device frames + marketing text)
+  ├── TranslationService          — Localized marketing copy generation (LLM)
+  └── LocaleDataGenerator         — Culturally appropriate test data (LLM)
 ```
+
+**Provider Abstraction**: Aperture uses the Adapter pattern to support multiple mobile automation backends. All automation operations (tap, type, screenshot, etc.) go through the `IMobileAutomationProvider` interface, allowing easy switching between MCP servers, Appium, Maestro, or custom implementations. See `src/core/providers/README.md` for details.
 
 ### Planned Directory Structure
 
@@ -43,7 +49,13 @@ aperture/
 │   ├── core/
 │   │   ├── flow-parser.ts        # YAML parsing + validation
 │   │   ├── ai-navigator.ts       # LLM agent loop
-│   │   ├── mcp-client.ts         # MCP server communication
+│   │   ├── providers/            # Mobile automation provider abstraction
+│   │   │   ├── mobile-automation-provider.ts  # Core interface
+│   │   │   ├── mobile-mcp-provider.ts         # MCP adapter
+│   │   │   ├── provider-factory.ts            # Provider registry
+│   │   │   ├── index.ts                       # Public exports
+│   │   │   └── README.md                      # Provider documentation
+│   │   ├── mcp-client.ts         # Legacy MCP client (kept for reference)
 │   │   ├── device-manager.ts     # xcrun simctl wrapper
 │   │   ├── locale-manager.ts     # Locale switching
 │   │   └── cost-tracker.ts       # Token usage + cost tracking
@@ -338,6 +350,85 @@ When the AI navigator fails a step:
 - CLI output: `ora` spinners for long operations, `chalk` for color-coding (green=success, yellow=retry, red=failure)
 - Final summary: table format with columns: Step | Status | Actions | Cost | Screenshot Path
 - Error messages: clear, actionable, with suggestions for fixing flow instructions
+
+## Provider Abstraction Layer
+
+**Purpose**: Decouple mobile automation backend from core application logic, enabling easy switching between different automation tools (MCP servers, Appium, Maestro, etc.).
+
+**Architecture**: Adapter pattern with `IMobileAutomationProvider` interface
+
+### Key Components
+
+1. **`IMobileAutomationProvider`** (interface): Defines all automation operations
+   - Connection: `connect()`, `disconnect()`, `initializeDevice()`
+   - UI Inspection: `getAccessibilityTree()`, `takeScreenshot()`, `getScreenInfo()`
+   - Interaction: `tap()`, `tapCoordinates()`, `type()`, `scroll()`, `swipe()`, `pressButton()`
+   - App Lifecycle: `launchApp()`, `terminateApp()`, `installApp()`, `uninstallApp()`
+
+2. **`MobileMCPProvider`**: Adapter for `@mobilenext/mobile-mcp`
+   - Uses MCP SDK for WebDriverAgent communication
+   - Implements AppleScript-based clicking for React Native apps without accessibility props
+   - Throws `UnsupportedOperationError` for operations not supported by mobile-mcp
+
+3. **`ProviderFactory`**: Registry and factory for creating providers
+   - Auto-detects provider type from endpoint string
+   - Extensible registry for adding new providers
+
+### Usage
+
+**In application code**:
+```typescript
+// AINavigator and run.ts depend on the interface, not concrete implementations
+async navigate(
+  instruction: string,
+  provider: IMobileAutomationProvider,  // ← Interface, not MCPClient
+  costTracker: CostTracker,
+  guardrails: Guardrails
+): Promise<NavigationResult>
+```
+
+**Creating providers**:
+```typescript
+// Auto-detect from endpoint
+const provider = ProviderFactory.create({
+  type: 'mcp-server-mobile',
+  endpoint: 'stdio://mcp-server-mobile'
+});
+
+await provider.connect('stdio://mcp-server-mobile');
+await provider.initializeDevice(deviceUdid);
+```
+
+**Configuration**:
+```yaml
+mcp:
+  endpoint: stdio://mcp-server-mobile  # Provider type auto-detected
+```
+
+### Adding New Providers
+
+See `src/core/providers/README.md` for detailed instructions. Brief steps:
+
+1. Create adapter class implementing `IMobileAutomationProvider`
+2. Register in `PROVIDER_REGISTRY` in `provider-factory.ts`
+3. Export from `index.ts`
+4. Use via config `endpoint`
+
+Example providers that could be added:
+- Different MCP servers (playwright-mcp, puppeteer-mcp)
+- Appium WebDriver
+- Maestro
+- Custom automation backends
+
+### Design Benefits
+
+- **Swappable backends**: Change provider by updating config endpoint
+- **Provider-specific capabilities**: Check what each provider supports via `getProviderInfo()`
+- **Graceful degradation**: Unsupported operations throw `UnsupportedOperationError`
+- **Testability**: Easy to create mock providers for testing
+- **Future-proof**: Add new providers without modifying core application code
+
+See `docs/PROVIDER_ABSTRACTION.md` for full implementation details and migration guide.
 
 ## Non-Goals
 
