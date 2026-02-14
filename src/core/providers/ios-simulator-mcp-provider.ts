@@ -107,11 +107,16 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
   async getAccessibilityTree(): Promise<AccessibilityNode> {
     this.ensureConnected();
 
+    console.log(`[ios-simulator-mcp] Getting accessibility tree...`);
+
     const result = await this.callTool('ui_describe_all', {
       udid: this.deviceUdid
     });
 
-    return this.parseAccessibilityTree(result);
+    const tree = this.parseAccessibilityTree(result);
+    console.log(`[ios-simulator-mcp] Accessibility tree retrieved (${tree.children.length} top-level elements)`);
+
+    return tree;
   }
 
   async getScreenInfo(): Promise<ScreenInfo> {
@@ -176,6 +181,8 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
     const roundedX = Math.round(x);
     const roundedY = Math.round(y);
 
+    console.log(`[ios-simulator-mcp] Tapping at (${roundedX}, ${roundedY})`);
+
     await this.callTool('ui_tap', {
       udid: this.deviceUdid,
       x: roundedX,
@@ -183,6 +190,8 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
       // Default tap duration (can be customized if needed)
       duration: '0.1'
     });
+
+    console.log(`[ios-simulator-mcp] Tap completed`);
 
     // Small delay for UI to respond
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -361,9 +370,15 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
     const maxRetries = 3;
     const baseDelay = 1000;
 
+    console.log(`[ios-simulator-mcp] Calling tool '${name}' with args:`, JSON.stringify(args, null, 2).substring(0, 200));
+
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
+        const startTime = Date.now();
         const result = await this.client!.callTool({ name, arguments: args }, undefined);
+        const elapsed = Date.now() - startTime;
+
+        console.log(`[ios-simulator-mcp] Tool '${name}' completed in ${elapsed}ms`);
 
         if (result.isError) {
           // Format error content properly
@@ -403,13 +418,16 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
 
         return result.content;
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(`[ios-simulator-mcp] Tool '${name}' attempt ${attempt + 1}/${maxRetries} failed:`, errorMsg);
+
         if (attempt === maxRetries - 1) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
           throw new Error(`MCP call '${name}' failed after ${maxRetries} attempts: ${errorMsg}`);
         }
 
         // Exponential backoff
         const delay = baseDelay * Math.pow(2, attempt);
+        console.log(`[ios-simulator-mcp] Retrying in ${delay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -428,8 +446,11 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
     // ios-simulator-mcp returns accessibility info as text/JSON
     // The exact format may vary - handle both structured and text responses
 
+    console.log(`[ios-simulator-mcp] Parsing accessibility tree (type: ${typeof data})`);
+
     if (typeof data === 'string') {
       // Parse text description into tree structure
+      console.log(`[ios-simulator-mcp] Accessibility tree is string, length: ${data.length}`);
       // For now, create a simple root node with the description
       return {
         role: 'Window',
@@ -453,8 +474,11 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
       // The exact structure depends on the MCP server's response format
       const obj = data as any;
 
+      console.log(`[ios-simulator-mcp] Accessibility tree is object, keys: ${Object.keys(obj).join(', ')}`);
+
       // Check if it has elements array (similar to mobile-mcp)
       if (Array.isArray(obj.elements)) {
+        console.log(`[ios-simulator-mcp] Found ${obj.elements.length} elements in tree`);
         const children: AccessibilityNode[] = obj.elements.map((element: any) => ({
           role: element.type || element.role || 'Unknown',
           label: element.label || element.name || '',
@@ -476,6 +500,7 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
       }
 
       // If it's a single element, wrap it
+      console.log(`[ios-simulator-mcp] Single element object, wrapping in root`);
       return {
         role: 'Window',
         label: 'Screen',
@@ -496,6 +521,7 @@ export class IOSSimulatorMCPProvider implements IMobileAutomationProvider {
 
     // Fallback: create empty tree
     console.warn('[ios-simulator-mcp] Unexpected accessibility tree format:', typeof data);
+    console.warn('[ios-simulator-mcp] Data sample:', JSON.stringify(data).substring(0, 200));
     return {
       role: 'Window',
       label: 'Screen',
