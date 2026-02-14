@@ -2,6 +2,10 @@ import { spawn } from 'child_process';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import ora from 'ora';
+import { readFile, stat } from 'fs/promises';
+import YAML from 'yaml';
+import { resolve, join } from 'path';
+import { homedir } from 'os';
 import { MCPClient } from '../../core/mcp-client.js';
 
 interface DoctorOptions {
@@ -48,6 +52,67 @@ async function installMobileMcp(): Promise<boolean> {
 }
 
 /**
+ * Clone WebDriverAgent from GitHub
+ */
+async function cloneWebDriverAgent(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const wdaPath = join(homedir(), 'WebDriverAgent');
+    console.log(chalk.dim('\n  Cloning WebDriverAgent to ~/WebDriverAgent...\n'));
+
+    const proc = spawn(
+      'git',
+      ['clone', '--depth', '1', 'https://github.com/appium/WebDriverAgent.git', wdaPath],
+      {
+        stdio: 'inherit',
+      }
+    );
+
+    proc.on('close', (code) => {
+      resolve(code === 0);
+    });
+
+    proc.on('error', () => {
+      resolve(false);
+    });
+  });
+}
+
+/**
+ * Build WebDriverAgent for a specific device
+ */
+async function buildWebDriverAgent(deviceName: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const wdaPath = join(homedir(), 'WebDriverAgent');
+    console.log(chalk.dim(`\n  Building WebDriverAgent for ${deviceName}...\n`));
+
+    const proc = spawn(
+      'xcodebuild',
+      [
+        '-project',
+        join(wdaPath, 'WebDriverAgent.xcodeproj'),
+        '-scheme',
+        'WebDriverAgentRunner',
+        '-destination',
+        `platform=iOS Simulator,name=${deviceName}`,
+        'build-for-testing',
+      ],
+      {
+        stdio: 'inherit',
+        cwd: wdaPath,
+      }
+    );
+
+    proc.on('close', (code) => {
+      resolve(code === 0);
+    });
+
+    proc.on('error', () => {
+      resolve(false);
+    });
+  });
+}
+
+/**
  * Check system requirements and dependencies
  */
 export async function doctorCommand(options: DoctorOptions): Promise<void> {
@@ -80,6 +145,163 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
     console.log(chalk.yellow('    Install Xcode from App Store or run:'));
     console.log(chalk.cyan('    xcode-select --install\n'));
     hasIssues = true;
+  }
+
+  // Check for npm (needed for mobile-mcp installation)
+  console.log(chalk.bold('npm'));
+  const hasNpm = await commandExists('npm');
+
+  if (hasNpm) {
+    console.log(chalk.green('  ✓ npm found in PATH\n'));
+  } else {
+    console.log(chalk.red('  ✗ npm not found (required to install mobile-mcp)\n'));
+    hasIssues = true;
+  }
+
+  // Check for WebDriverAgent (required for mobile-mcp iOS support)
+  console.log(chalk.bold('WebDriverAgent for iOS'));
+  const wdaPath = join(homedir(), 'WebDriverAgent');
+  let wdaExists = false;
+
+  try {
+    await stat(wdaPath);
+    wdaExists = true;
+  } catch {
+    wdaExists = false;
+  }
+
+  if (wdaExists) {
+    console.log(chalk.green(`  ✓ WebDriverAgent found at ${wdaPath}\n`));
+    console.log(chalk.dim('  To start WebDriverAgent, run in a separate terminal:\n'));
+    console.log(chalk.cyan('    cd ~/WebDriverAgent'));
+    console.log(chalk.cyan('    xcodebuild -project WebDriverAgent.xcodeproj \\'));
+    console.log(chalk.cyan('               -scheme WebDriverAgentRunner \\'));
+    console.log(chalk.cyan('               -destination \'platform=iOS Simulator,name=YOUR_DEVICE\' \\'));
+    console.log(chalk.cyan('               test\n'));
+  } else {
+    console.log(chalk.red(`  ✗ WebDriverAgent not found at ${wdaPath}\n`));
+    console.log(chalk.yellow('    WebDriverAgent is required for mobile-mcp to control iOS Simulators\n'));
+    hasIssues = true;
+
+    // Offer to install if --fix or interactive mode
+    if (options.fix) {
+      const cloneSpinner = ora('Cloning WebDriverAgent...').start();
+      const cloned = await cloneWebDriverAgent();
+
+      if (cloned) {
+        cloneSpinner.succeed('WebDriverAgent cloned successfully');
+
+        // Get device name from config or use default
+        let deviceName = 'iPhone 15 Pro Max';
+
+        try {
+          const configPath = resolve(process.cwd(), 'aperture.config.yaml');
+          const configContent = await readFile(configPath, 'utf-8');
+          const config = YAML.parse(configContent);
+          if (config?.devices?.iphone) {
+            deviceName = config.devices.iphone;
+          }
+        } catch {
+          // Config not found, use default
+        }
+
+        const buildSpinner = ora(`Building WebDriverAgent for ${deviceName}...`).start();
+        const built = await buildWebDriverAgent(deviceName);
+
+        if (built) {
+          buildSpinner.succeed('WebDriverAgent built successfully');
+          console.log(chalk.green('\n  WebDriverAgent is ready!\n'));
+          console.log(chalk.dim('  To start WebDriverAgent, run in a separate terminal:\n'));
+          console.log(chalk.cyan('    cd ~/WebDriverAgent'));
+          console.log(chalk.cyan('    xcodebuild -project WebDriverAgent.xcodeproj \\'));
+          console.log(chalk.cyan('               -scheme WebDriverAgentRunner \\'));
+          console.log(chalk.cyan(`               -destination 'platform=iOS Simulator,name=${deviceName}' \\`));
+          console.log(chalk.cyan('               test\n'));
+          hasIssues = false; // Fixed the issue
+        } else {
+          buildSpinner.fail('Failed to build WebDriverAgent');
+          console.log(chalk.yellow('\n  Please build it manually:'));
+          console.log(chalk.cyan(`  cd ${wdaPath}`));
+          console.log(chalk.cyan('  xcodebuild -project WebDriverAgent.xcodeproj \\'));
+          console.log(chalk.cyan('             -scheme WebDriverAgentRunner \\'));
+          console.log(chalk.cyan('             -destination \'platform=iOS Simulator,name=YOUR_DEVICE\' \\'));
+          console.log(chalk.cyan('             build-for-testing\n'));
+        }
+      } else {
+        cloneSpinner.fail('Failed to clone WebDriverAgent');
+        console.log(chalk.yellow('\n  Please clone it manually:'));
+        console.log(chalk.cyan('  git clone --depth 1 https://github.com/appium/WebDriverAgent.git ~/WebDriverAgent\n'));
+      }
+    } else {
+      // Interactive mode - ask user
+      const { install } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'install',
+          message: 'Would you like to clone and build WebDriverAgent now?',
+          default: true,
+        },
+      ]);
+
+      if (install) {
+        const cloned = await cloneWebDriverAgent();
+
+        if (cloned) {
+          console.log(chalk.green('\n✓ WebDriverAgent cloned successfully\n'));
+
+          // Get device name from config or prompt
+          let deviceName = 'iPhone 15 Pro Max';
+
+          try {
+            const configPath = resolve(process.cwd(), 'aperture.config.yaml');
+            const configContent = await readFile(configPath, 'utf-8');
+            const config = YAML.parse(configContent);
+            if (config?.devices?.iphone) {
+              deviceName = config.devices.iphone;
+            }
+          } catch {
+            // Config not found, prompt for device
+            const { device } = await inquirer.prompt([
+              {
+                type: 'input',
+                name: 'device',
+                message: 'Enter the iOS Simulator device name to build for:',
+                default: 'iPhone 15 Pro Max',
+              },
+            ]);
+            deviceName = device;
+          }
+
+          const built = await buildWebDriverAgent(deviceName);
+
+          if (built) {
+            console.log(chalk.green('\n✓ WebDriverAgent built successfully\n'));
+            console.log(chalk.dim('  To start WebDriverAgent, run in a separate terminal:\n'));
+            console.log(chalk.cyan('    cd ~/WebDriverAgent'));
+            console.log(chalk.cyan('    xcodebuild -project WebDriverAgent.xcodeproj \\'));
+            console.log(chalk.cyan('               -scheme WebDriverAgentRunner \\'));
+            console.log(chalk.cyan(`               -destination 'platform=iOS Simulator,name=${deviceName}' \\`));
+            console.log(chalk.cyan('               test\n'));
+            hasIssues = false; // Fixed the issue
+          } else {
+            console.log(chalk.red('\n✗ Failed to build WebDriverAgent\n'));
+            console.log(chalk.yellow('  Please build it manually:'));
+            console.log(chalk.cyan(`  cd ${wdaPath}`));
+            console.log(chalk.cyan('  xcodebuild -project WebDriverAgent.xcodeproj \\'));
+            console.log(chalk.cyan('             -scheme WebDriverAgentRunner \\'));
+            console.log(chalk.cyan('             -destination \'platform=iOS Simulator,name=YOUR_DEVICE\' \\'));
+            console.log(chalk.cyan('             build-for-testing\n'));
+          }
+        } else {
+          console.log(chalk.red('\n✗ Failed to clone WebDriverAgent\n'));
+          console.log(chalk.yellow('  Please clone it manually:'));
+          console.log(chalk.cyan('  git clone --depth 1 https://github.com/appium/WebDriverAgent.git ~/WebDriverAgent\n'));
+        }
+      } else {
+        console.log(chalk.yellow('\n  You can clone it later with:'));
+        console.log(chalk.cyan('  git clone --depth 1 https://github.com/appium/WebDriverAgent.git ~/WebDriverAgent\n'));
+      }
+    }
   }
 
   // Check for mobile-mcp
@@ -132,34 +354,6 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
       }
     }
   }
-
-  // Check for npm (needed for mobile-mcp installation)
-  console.log(chalk.bold('npm'));
-  const hasNpm = await commandExists('npm');
-
-  if (hasNpm) {
-    console.log(chalk.green('  ✓ npm found in PATH\n'));
-  } else {
-    console.log(chalk.red('  ✗ npm not found (required to install mobile-mcp)\n'));
-    hasIssues = true;
-  }
-
-  // Check for WebDriverAgent (required for mobile-mcp iOS support)
-  console.log(chalk.bold('WebDriverAgent for iOS'));
-  console.log(chalk.yellow('  ⚠ WebDriverAgent must be running on iOS Simulator\n'));
-  console.log(chalk.dim('  mobile-mcp requires WebDriverAgent to control iOS devices.'));
-  console.log(chalk.dim('  WebDriverAgent must be running BEFORE aperture run.\n'));
-  console.log(chalk.bold('  Setup WebDriverAgent:\n'));
-  console.log(chalk.cyan('    1. Clone WebDriverAgent:'));
-  console.log(chalk.dim('       git clone --depth 1 https://github.com/appium/WebDriverAgent.git\n'));
-  console.log(chalk.cyan('    2. Start WebDriverAgent (replace iPhone name):'));
-  console.log(chalk.dim('       cd WebDriverAgent'));
-  console.log(chalk.dim('       xcodebuild -project WebDriverAgent.xcodeproj \\'));
-  console.log(chalk.dim('                  -scheme WebDriverAgentRunner \\'));
-  console.log(chalk.dim('                  -destination \'platform=iOS Simulator,name=iPhone 17 Pro Max\' \\'));
-  console.log(chalk.dim('                  test\n'));
-  console.log(chalk.cyan('    3. Keep WebDriverAgent running in a separate terminal'));
-  console.log(chalk.cyan('    4. Then run aperture run\n'));
 
   // Test MCP connection if mobile-mcp is available
   if (hasMobileMcp || !hasIssues) {
