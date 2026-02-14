@@ -3,6 +3,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { initCommand } from './commands/init.js';
+import { flowCommand } from './commands/flow.js';
 import { devicesCommand } from './commands/devices.js';
 import { runCommand } from './commands/run.js';
 import { exportCommand } from './commands/export.js';
@@ -23,6 +24,13 @@ program
   .option('--yes', 'Use default values without prompting')
   .option('--app <path>', 'Path to .app bundle')
   .action(initCommand);
+
+// Flow command
+program
+  .command('flow')
+  .description('Interactive flow editor wizard')
+  .option('--file <path>', 'Path to flow YAML file', 'aperture-flow.yaml')
+  .action(flowCommand);
 
 // Devices command
 program

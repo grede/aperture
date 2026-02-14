@@ -326,8 +326,10 @@ export async function initCommand(options: InitOptions): Promise<void> {
     console.log(chalk.dim(`  Flow:   ${flowPath}\n`));
 
     console.log(chalk.bold('Next steps:\n'));
-    console.log(`  1. Edit ${chalk.cyan('aperture-flow.yaml')} to define your screenshot flow`);
+    console.log(`  1. Run ${chalk.cyan('aperture flow')} to define your screenshot flow`);
+    console.log(`     ${chalk.dim('(or manually edit aperture-flow.yaml)')}`);
     console.log(`  2. Set your OpenAI API key: ${chalk.cyan('export OPENAI_API_KEY=sk-...')}`);
+    console.log(`     ${chalk.dim('(or enter it when prompted)')}`);
     console.log(`  3. Run ${chalk.cyan('aperture run')} to generate screenshots\n`);
   } catch (error) {
     console.error(chalk.red('Error writing configuration:'), error);
