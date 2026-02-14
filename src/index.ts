@@ -5,6 +5,10 @@ export { DeviceManager } from './core/device-manager.js';
 export { MCPClient } from './core/mcp-client.js';
 export { AINavigator } from './core/ai-navigator.js';
 export { CostTracker } from './core/cost-tracker.js';
+export { LocaleManager } from './core/locale-manager.js';
+export { TemplateEngine } from './templates/engine.js';
+export { TranslationService } from './localization/translation-service.js';
+export { LocaleDataGenerator } from './localization/locale-data-generator.js';
 
 export type {
   FlowDefinition,

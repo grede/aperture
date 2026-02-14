@@ -5,6 +5,9 @@ import chalk from 'chalk';
 import { initCommand } from './commands/init.js';
 import { devicesCommand } from './commands/devices.js';
 import { runCommand } from './commands/run.js';
+import { exportCommand } from './commands/export.js';
+import { generateDataCommand } from './commands/generate-data.js';
+import { generateCopyCommand } from './commands/generate-copy.js';
 
 const program = new Command();
 
@@ -40,31 +43,30 @@ program
   .option('--verbose', 'Enable verbose logging')
   .action(runCommand);
 
-// Export command (placeholder)
+// Export command
 program
   .command('export')
   .description('Composite screenshots into store-ready images')
-  .option('--style <style>', 'Template style')
-  .action(() => {
-    console.log(chalk.yellow('Export command coming in Milestone 2 (Template Engine)'));
-  });
+  .option('--style <style>', 'Template style (minimal|modern|gradient|dark|playful)')
+  .option('--locale <locale>', 'Export for a single locale only')
+  .option('--device <type>', 'Export for specific device (iphone|ipad|both)', 'both')
+  .action(exportCommand);
 
-// Generate-data command (placeholder)
+// Generate-data command
 program
   .command('generate-data')
   .description('Generate locale-specific test data')
   .option('--regenerate', 'Overwrite existing locale data files')
-  .action(() => {
-    console.log(chalk.yellow('Generate-data command coming in Milestone 2 (Localization)'));
-  });
+  .option('--locale <locale>', 'Generate data for a single locale only')
+  .action(generateDataCommand);
 
-// Generate-copy command (placeholder)
+// Generate-copy command
 program
   .command('generate-copy')
   .description('Generate localized marketing copy')
-  .action(() => {
-    console.log(chalk.yellow('Generate-copy command coming in Milestone 2 (Localization)'));
-  });
+  .option('--regenerate', 'Overwrite existing copy files')
+  .option('--locale <locale>', 'Generate copy for a single locale only')
+  .action(generateCopyCommand);
 
 // Parse arguments
 program.parse();
