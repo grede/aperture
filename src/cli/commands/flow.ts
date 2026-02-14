@@ -167,7 +167,7 @@ async function createWaitStep(): Promise<FlowStep> {
 /**
  * Prompt to add a new step
  */
-async function addStep(): Promise<FlowStep> {
+async function addStep(): Promise<FlowStep | null> {
   const { actionType } = await inquirer.prompt([
     {
       type: 'list',
@@ -179,9 +179,15 @@ async function addStep(): Promise<FlowStep> {
         { name: '📸 Screenshot - Capture current screen', value: 'screenshot' },
         { name: '⌨️  Type - Enter text', value: 'type' },
         { name: '⏱️  Wait - Pause execution', value: 'wait' },
+        new inquirer.Separator(),
+        { name: '← Go back', value: '__back__' },
       ],
     },
   ]);
+
+  if (actionType === '__back__') {
+    return null;
+  }
 
   switch (actionType) {
     case 'navigate':
@@ -202,7 +208,7 @@ async function addStep(): Promise<FlowStep> {
 /**
  * Edit an existing step
  */
-async function editStep(currentStep: FlowStep): Promise<FlowStep> {
+async function editStep(currentStep: FlowStep): Promise<FlowStep | null> {
   console.log(chalk.dim('\nCurrent step:'), formatStep(currentStep, 0));
 
   const { action } = await inquirer.prompt([
@@ -213,9 +219,15 @@ async function editStep(currentStep: FlowStep): Promise<FlowStep> {
       choices: [
         { name: 'Edit this step', value: 'edit' },
         { name: 'Keep as is', value: 'keep' },
+        new inquirer.Separator(),
+        { name: '← Go back', value: '__back__' },
       ],
     },
   ]);
+
+  if (action === '__back__') {
+    return null;
+  }
 
   if (action === 'keep') {
     return currentStep;
@@ -242,175 +254,212 @@ export async function flowCommand(options: FlowOptions): Promise<void> {
   const flowPath = resolve(process.cwd(), options.file ?? 'aperture-flow.yaml');
   let flow: FlowDefinition;
 
-  // Try to load existing flow
+  // Handle Ctrl+C gracefully
+  const handleExit = () => {
+    console.log(chalk.yellow('\n\nExited without saving.\n'));
+    process.exit(0);
+  };
+
+  process.on('SIGINT', handleExit);
+
   try {
-    const flowContent = await readFile(flowPath, 'utf-8');
-    flow = YAML.parse(flowContent) as FlowDefinition;
-    console.log(chalk.green(`\n✓ Loaded existing flow from ${chalk.cyan('aperture-flow.yaml')}`));
-  } catch {
-    // Create new flow
-    const configPath = resolve(process.cwd(), 'aperture.config.yaml');
-    let appPath = './build/MyApp.app';
-
+    // Try to load existing flow
     try {
-      const configContent = await readFile(configPath, 'utf-8');
-      const config = YAML.parse(configContent);
-      appPath = config.app ?? appPath;
+      const flowContent = await readFile(flowPath, 'utf-8');
+      flow = YAML.parse(flowContent) as FlowDefinition;
+      console.log(chalk.green(`\n✓ Loaded existing flow from ${chalk.cyan('aperture-flow.yaml')}`));
     } catch {
-      // Config doesn't exist, use default
+      // Create new flow
+      const configPath = resolve(process.cwd(), 'aperture.config.yaml');
+      let appPath = './build/MyApp.app';
+
+      try {
+        const configContent = await readFile(configPath, 'utf-8');
+        const config = YAML.parse(configContent);
+        appPath = config.app ?? appPath;
+      } catch {
+        // Config doesn't exist, use default
+      }
+
+      flow = {
+        app: appPath,
+        steps: [],
+      };
+
+      console.log(chalk.yellow('\n⚠  No existing flow found. Creating new flow.'));
     }
 
-    flow = {
-      app: appPath,
-      steps: [],
-    };
+    console.log(chalk.bold.blue('\n🎬 Aperture Flow Editor\n'));
+    console.log(chalk.dim('Build your screenshot flow step by step.\n'));
+    console.log(chalk.dim('Tip: Press Ctrl+C at any time to exit without saving.\n'));
 
-    console.log(chalk.yellow('\n⚠  No existing flow found. Creating new flow.'));
-  }
+    // Main loop
+    let running = true;
 
-  console.log(chalk.bold.blue('\n🎬 Aperture Flow Editor\n'));
-  console.log(chalk.dim('Build your screenshot flow step by step.\n'));
+    while (running) {
+      displayFlow(flow);
 
-  // Main loop
-  let running = true;
+      const { mainAction } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'mainAction',
+          message: 'What would you like to do?',
+          choices: [
+            { name: '➕ Add step', value: 'add' },
+            ...(flow.steps.length > 0
+              ? [
+                  { name: '✏️  Edit step', value: 'edit' },
+                  { name: '🗑️  Delete step', value: 'delete' },
+                  { name: '↕️  Reorder steps', value: 'reorder' },
+                  new inquirer.Separator(),
+                ]
+              : []),
+            { name: '💾 Save and exit', value: 'save' },
+            { name: '🚪 Exit without saving', value: 'exit' },
+          ],
+        },
+      ]);
 
-  while (running) {
-    displayFlow(flow);
+      switch (mainAction) {
+        case 'add': {
+          const newStep = await addStep();
+          if (newStep !== null) {
+            flow.steps.push(newStep);
+            console.log(chalk.green('\n✓ Step added'));
+          }
+          break;
+        }
 
-    const { mainAction } = await inquirer.prompt([
-      {
-        type: 'list',
-        name: 'mainAction',
-        message: 'What would you like to do?',
-        choices: [
-          { name: '➕ Add step', value: 'add' },
-          ...(flow.steps.length > 0
-            ? [
-                { name: '✏️  Edit step', value: 'edit' },
-                { name: '🗑️  Delete step', value: 'delete' },
-                { name: '↕️  Reorder steps', value: 'reorder' },
+        case 'edit': {
+          const { stepIndex } = await inquirer.prompt([
+            {
+              type: 'list',
+              name: 'stepIndex',
+              message: 'Select step to edit:',
+              choices: [
+                ...flow.steps.map((step, idx) => ({
+                  name: formatStep(step, idx),
+                  value: idx,
+                })),
                 new inquirer.Separator(),
-              ]
-            : []),
-          { name: '💾 Save and exit', value: 'save' },
-          { name: '🚪 Exit without saving', value: 'exit' },
-        ],
-      },
-    ]);
-
-    switch (mainAction) {
-      case 'add': {
-        const newStep = await addStep();
-        flow.steps.push(newStep);
-        console.log(chalk.green('\n✓ Step added'));
-        break;
-      }
-
-      case 'edit': {
-        const { stepIndex } = await inquirer.prompt([
-          {
-            type: 'list',
-            name: 'stepIndex',
-            message: 'Select step to edit:',
-            choices: flow.steps.map((step, idx) => ({
-              name: formatStep(step, idx),
-              value: idx,
-            })),
-          },
-        ]);
-
-        flow.steps[stepIndex] = await editStep(flow.steps[stepIndex]);
-        console.log(chalk.green('\n✓ Step updated'));
-        break;
-      }
-
-      case 'delete': {
-        const { stepIndex } = await inquirer.prompt([
-          {
-            type: 'list',
-            name: 'stepIndex',
-            message: 'Select step to delete:',
-            choices: flow.steps.map((step, idx) => ({
-              name: formatStep(step, idx),
-              value: idx,
-            })),
-          },
-        ]);
-
-        const { confirm } = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'confirm',
-            message: 'Are you sure?',
-            default: false,
-          },
-        ]);
-
-        if (confirm) {
-          flow.steps.splice(stepIndex, 1);
-          console.log(chalk.green('\n✓ Step deleted'));
-        }
-        break;
-      }
-
-      case 'reorder': {
-        const { stepIndex } = await inquirer.prompt([
-          {
-            type: 'list',
-            name: 'stepIndex',
-            message: 'Select step to move:',
-            choices: flow.steps.map((step, idx) => ({
-              name: formatStep(step, idx),
-              value: idx,
-            })),
-          },
-        ]);
-
-        const { newPosition } = await inquirer.prompt([
-          {
-            type: 'number',
-            name: 'newPosition',
-            message: `Move to position (1-${flow.steps.length}):`,
-            default: stepIndex + 1,
-            validate: (input: number) => {
-              if (input < 1 || input > flow.steps.length) {
-                return `Position must be between 1 and ${flow.steps.length}`;
-              }
-              return true;
+                { name: '← Go back', value: '__back__' },
+              ],
             },
-          },
-        ]);
+          ]);
 
-        const [step] = flow.steps.splice(stepIndex, 1);
-        flow.steps.splice(newPosition - 1, 0, step);
-        console.log(chalk.green('\n✓ Step moved'));
-        break;
-      }
-
-      case 'save': {
-        await writeFile(flowPath, YAML.stringify(flow));
-        console.log(chalk.green(`\n✓ Flow saved to ${chalk.cyan('aperture-flow.yaml')}`));
-        console.log(chalk.dim(`\nRun ${chalk.cyan('aperture run')} to execute your flow.\n`));
-        running = false;
-        break;
-      }
-
-      case 'exit': {
-        const { confirmExit } = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'confirmExit',
-            message: 'Exit without saving changes?',
-            default: false,
-          },
-        ]);
-
-        if (confirmExit) {
-          console.log(chalk.yellow('\nExited without saving.\n'));
-          running = false;
+          if (stepIndex !== '__back__') {
+            const updatedStep = await editStep(flow.steps[stepIndex]);
+            if (updatedStep !== null) {
+              flow.steps[stepIndex] = updatedStep;
+              console.log(chalk.green('\n✓ Step updated'));
+            }
+          }
+          break;
         }
-        break;
+
+        case 'delete': {
+          const { stepIndex } = await inquirer.prompt([
+            {
+              type: 'list',
+              name: 'stepIndex',
+              message: 'Select step to delete:',
+              choices: [
+                ...flow.steps.map((step, idx) => ({
+                  name: formatStep(step, idx),
+                  value: idx,
+                })),
+                new inquirer.Separator(),
+                { name: '← Go back', value: '__back__' },
+              ],
+            },
+          ]);
+
+          if (stepIndex !== '__back__') {
+            const { confirm } = await inquirer.prompt([
+              {
+                type: 'confirm',
+                name: 'confirm',
+                message: 'Are you sure?',
+                default: false,
+              },
+            ]);
+
+            if (confirm) {
+              flow.steps.splice(stepIndex, 1);
+              console.log(chalk.green('\n✓ Step deleted'));
+            }
+          }
+          break;
+        }
+
+        case 'reorder': {
+          const { stepIndex } = await inquirer.prompt([
+            {
+              type: 'list',
+              name: 'stepIndex',
+              message: 'Select step to move:',
+              choices: [
+                ...flow.steps.map((step, idx) => ({
+                  name: formatStep(step, idx),
+                  value: idx,
+                })),
+                new inquirer.Separator(),
+                { name: '← Go back', value: '__back__' },
+              ],
+            },
+          ]);
+
+          if (stepIndex !== '__back__') {
+            const { newPosition } = await inquirer.prompt([
+              {
+                type: 'number',
+                name: 'newPosition',
+                message: `Move to position (1-${flow.steps.length}):`,
+                default: stepIndex + 1,
+                validate: (input: number) => {
+                  if (input < 1 || input > flow.steps.length) {
+                    return `Position must be between 1 and ${flow.steps.length}`;
+                  }
+                  return true;
+                },
+              },
+            ]);
+
+            const [step] = flow.steps.splice(stepIndex, 1);
+            flow.steps.splice(newPosition - 1, 0, step);
+            console.log(chalk.green('\n✓ Step moved'));
+          }
+          break;
+        }
+
+        case 'save': {
+          await writeFile(flowPath, YAML.stringify(flow));
+          console.log(chalk.green(`\n✓ Flow saved to ${chalk.cyan('aperture-flow.yaml')}`));
+          console.log(chalk.dim(`\nRun ${chalk.cyan('aperture run')} to execute your flow.\n`));
+          running = false;
+          break;
+        }
+
+        case 'exit': {
+          const { confirmExit } = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'confirmExit',
+              message: 'Exit without saving changes?',
+              default: false,
+            },
+          ]);
+
+          if (confirmExit) {
+            console.log(chalk.yellow('\nExited without saving.\n'));
+            running = false;
+          }
+          break;
+        }
       }
     }
+  } finally {
+    // Remove event listener
+    process.removeListener('SIGINT', handleExit);
   }
 }
