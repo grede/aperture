@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { resolve, join } from 'path';
+import { spawn } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
 import inquirer from 'inquirer';
@@ -20,8 +21,37 @@ interface RunOptions {
   verbose?: boolean;
 }
 
+/**
+ * Check if a command exists in PATH
+ */
+async function commandExists(command: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const which = process.platform === 'win32' ? 'where' : 'which';
+    const proc = spawn(which, [command], { stdio: 'ignore' });
+
+    proc.on('close', (code) => {
+      resolve(code === 0);
+    });
+
+    proc.on('error', () => {
+      resolve(false);
+    });
+  });
+}
+
 export async function runCommand(options: RunOptions): Promise<void> {
   const startTime = Date.now();
+
+  // Check for mobile-mcp before proceeding
+  const hasMobileMcp = await commandExists('mobile-mcp');
+
+  if (!hasMobileMcp) {
+    console.error(chalk.red('\n✗ mobile-mcp not found in PATH\n'));
+    console.log(chalk.yellow('mobile-mcp is required to control iOS Simulators.\n'));
+    console.log(chalk.dim('Run the following command to check and install dependencies:\n'));
+    console.log(chalk.cyan('  aperture doctor\n'));
+    process.exit(1);
+  }
 
   // Load config
   const configPath = resolve(process.cwd(), 'aperture.config.yaml');

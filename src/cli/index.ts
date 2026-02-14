@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { initCommand } from './commands/init.js';
 import { flowCommand } from './commands/flow.js';
+import { doctorCommand } from './commands/doctor.js';
 import { devicesCommand } from './commands/devices.js';
 import { runCommand } from './commands/run.js';
 import { exportCommand } from './commands/export.js';
@@ -31,6 +32,13 @@ program
   .description('Interactive flow editor wizard')
   .option('--file <path>', 'Path to flow YAML file', 'aperture-flow.yaml')
   .action(flowCommand);
+
+// Doctor command
+program
+  .command('doctor')
+  .description('Check system requirements and install dependencies')
+  .option('--fix', 'Automatically fix issues without prompting')
+  .action(doctorCommand);
 
 // Devices command
 program
