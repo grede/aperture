@@ -88,6 +88,23 @@ export async function runCommand(options: RunOptions): Promise<void> {
         console.log(chalk.cyan(`   export ${envVar}="${apiKey}"\n`));
       }
     }
+
+    // Validate app installation configuration
+    const shouldInstall = config.installApp !== false; // Default to true if not specified
+    if (shouldInstall && !config.app) {
+      console.error(
+        chalk.red('Error: app path is required when installApp is true (or not specified)')
+      );
+      console.log(chalk.dim('Either set installApp: false to use existing app, or provide app path\n'));
+      process.exit(1);
+    }
+    if (!shouldInstall && !config.bundleId) {
+      console.error(
+        chalk.red('Error: bundleId is required when installApp is false')
+      );
+      console.log(chalk.dim('bundleId is needed to launch the existing app\n'));
+      process.exit(1);
+    }
   } catch (error) {
     console.error(
       chalk.red('Error loading config:'),
@@ -238,13 +255,22 @@ export async function runCommand(options: RunOptions): Promise<void> {
         // Don't manually start WebDriverAgent - let mobile-mcp handle it
         // This avoids conflicts between our WDA process and mobile-mcp's WDA management
 
-        // Now install and launch app
-        const appSpinner = ora('Installing app...').start();
-        await deviceManager.install(device.udid, resolve(process.cwd(), config.app));
+        // Install and/or launch app based on configuration
+        const shouldInstall = config.installApp !== false; // Default to true
+        let bundleId: string;
 
-        const bundleId = await deviceManager.getBundleId(resolve(process.cwd(), config.app));
-        await deviceManager.launch(device.udid, bundleId);
-        appSpinner.succeed('App launched');
+        if (shouldInstall) {
+          const appSpinner = ora('Installing app...').start();
+          await deviceManager.install(device.udid, resolve(process.cwd(), config.app!));
+          bundleId = await deviceManager.getBundleId(resolve(process.cwd(), config.app!));
+          await deviceManager.launch(device.udid, bundleId);
+          appSpinner.succeed('App installed and launched');
+        } else {
+          const appSpinner = ora('Launching existing app...').start();
+          bundleId = config.bundleId;
+          await deviceManager.launch(device.udid, bundleId);
+          appSpinner.succeed(`App launched (${bundleId})`);
+        }
 
         // Connect to mobile automation provider (e.g., MCP server)
         const providerSpinner = ora('Connecting to mobile automation provider...').start();

@@ -1,0 +1,89 @@
+# Aperture Configuration - Using Existing App
+# This example shows how to use an app already installed in the simulator
+# Useful when you need to preserve app state (pre-seeded data, logged-in users, etc.)
+
+# ────────────────────────────────────────────────────────────────
+# App Configuration - Existing App Mode
+# ────────────────────────────────────────────────────────────────
+
+# Bundle ID of the app already installed in simulator
+bundleId: com.example.myapp
+
+# Skip app installation - use existing app
+installApp: false
+
+# app field is optional when installApp is false
+# You can still provide it for documentation purposes
+# app: ./build/MyApp.app
+
+# ────────────────────────────────────────────────────────────────
+# Workflow: Using Existing App
+# ────────────────────────────────────────────────────────────────
+# 1. Manually install debug build in simulator with test data
+#    xcrun simctl install <udid> ./build/MyApp.app
+# 2. Set up app state (login, seed data, configure settings)
+# 3. Run aperture with installApp: false to preserve state
+# 4. Generate screenshots across all locales without losing state
+
+# ────────────────────────────────────────────────────────────────
+# Flow Definition
+# ────────────────────────────────────────────────────────────────
+
+flow: ./aperture-flow.yaml
+
+# ────────────────────────────────────────────────────────────────
+# Localization
+# ────────────────────────────────────────────────────────────────
+
+locales:
+  - en-US
+  - de
+  - ja
+
+# ────────────────────────────────────────────────────────────────
+# Device Configuration
+# ────────────────────────────────────────────────────────────────
+
+devices:
+  iphone: "iPhone 15 Pro Max"
+
+# ────────────────────────────────────────────────────────────────
+# Template Style
+# ────────────────────────────────────────────────────────────────
+
+template:
+  style: modern
+
+# ────────────────────────────────────────────────────────────────
+# Output Configuration
+# ────────────────────────────────────────────────────────────────
+
+output: ./aperture-output
+
+# ────────────────────────────────────────────────────────────────
+# AI Guardrails & Safety
+# ────────────────────────────────────────────────────────────────
+
+guardrails:
+  maxActionsPerStep: 10
+  stepTimeoutSec: 60
+  runTimeoutSec: 600
+  costCapUsd: 5.00
+  forbiddenActions: []
+
+# ────────────────────────────────────────────────────────────────
+# LLM Configuration
+# ────────────────────────────────────────────────────────────────
+
+llm:
+  apiKey: ${OPENAI_API_KEY}
+  defaultModel: gpt-4o-mini
+  escalationModel: gpt-4o
+  escalateAfterAttempts: 5
+
+# ────────────────────────────────────────────────────────────────
+# Mobile Automation Provider
+# ────────────────────────────────────────────────────────────────
+
+mcp:
+  endpoint: stdio://mcp-server-mobile

@@ -103,8 +103,9 @@ export interface CostSummary {
 // ── Configuration Types ────────────────────────────────────────
 
 export interface ApertureConfig {
-  app: string;
+  app?: string; // Optional: only required if installApp is true
   bundleId: string;
+  installApp?: boolean; // Optional: defaults to true. Set to false to launch existing app without installing
   flow: string;
   locales: string[];
   devices: {

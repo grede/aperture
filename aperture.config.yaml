@@ -1,0 +1,119 @@
+# Aperture Configuration File
+# This example shows how to configure Aperture for screenshot generation
+
+# ────────────────────────────────────────────────────────────────
+# App Configuration
+# ────────────────────────────────────────────────────────────────
+
+# Option 1: Install app fresh each run (default behavior)
+# Use this when you want to ensure a clean app state
+app: ./build/MyApp.app
+bundleId: com.example.myapp
+# installApp: true  # Optional: defaults to true
+
+# Option 2: Use existing app already installed in simulator
+# Use this when you need to preserve app state (e.g., pre-seeded data, logged-in users)
+# app: ./build/MyApp.app  # Optional when installApp is false
+# bundleId: com.example.myapp
+# installApp: false  # Skip installation, launch existing app by bundleId
+
+# ────────────────────────────────────────────────────────────────
+# Flow Definition
+# ────────────────────────────────────────────────────────────────
+
+flow: ./aperture-flow.yaml
+
+# ────────────────────────────────────────────────────────────────
+# Localization
+# ────────────────────────────────────────────────────────────────
+
+locales:
+  - en-US
+  - de
+  - ja
+  - pt-BR
+  - es
+  - fr
+  - it
+  - ko
+  - zh-Hans
+  - ar
+
+# ────────────────────────────────────────────────────────────────
+# Device Configuration
+# ────────────────────────────────────────────────────────────────
+
+devices:
+  # Required: iPhone device for 6.5" App Store screenshots
+  iphone: "iPhone 15 Pro Max"
+
+  # Optional: iPad device for 13" App Store screenshots
+  # Omit or comment out to skip iPad screenshots
+  ipad: "iPad Pro (13-inch) (M4)"
+
+# ────────────────────────────────────────────────────────────────
+# Template Style
+# ────────────────────────────────────────────────────────────────
+
+template:
+  # Available styles: minimal, modern, gradient, dark, playful
+  style: modern
+
+# ────────────────────────────────────────────────────────────────
+# Output Configuration
+# ────────────────────────────────────────────────────────────────
+
+output: ./aperture-output
+
+# ────────────────────────────────────────────────────────────────
+# AI Guardrails & Safety
+# ────────────────────────────────────────────────────────────────
+
+guardrails:
+  # Maximum actions AI can take per navigation step
+  maxActionsPerStep: 10
+
+  # Timeout for individual steps (seconds)
+  stepTimeoutSec: 60
+
+  # Timeout for entire run (seconds)
+  runTimeoutSec: 600
+
+  # Maximum cost per run (USD)
+  costCapUsd: 5.00
+
+  # Actions that AI is forbidden from executing
+  # e.g., ["delete", "remove", "reset"]
+  forbiddenActions: []
+
+  # Number of consecutive actions with no screen change before triggering vision fallback
+  # Optional: defaults to 5
+  noProgressThreshold: 5
+
+# ────────────────────────────────────────────────────────────────
+# LLM Configuration
+# ────────────────────────────────────────────────────────────────
+
+llm:
+  # OpenAI API key (can use environment variable)
+  apiKey: ${OPENAI_API_KEY}
+
+  # Default model for navigation (fast & cheap)
+  defaultModel: gpt-4o-mini
+
+  # Escalation model for difficult steps (slower & more capable)
+  escalationModel: gpt-4o
+
+  # Number of failed attempts before escalating to better model
+  escalateAfterAttempts: 5
+
+# ────────────────────────────────────────────────────────────────
+# Mobile Automation Provider
+# ────────────────────────────────────────────────────────────────
+
+mcp:
+  # MCP server endpoint
+  # Supported providers:
+  #   - stdio://mcp-server-mobile (mobile-next/mobile-mcp)
+  #   - stdio://ios-simulator-mcp (ios-simulator-mcp via idb)
+  endpoint: stdio://mcp-server-mobile

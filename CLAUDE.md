@@ -194,8 +194,15 @@ steps:
 
 ### `aperture.config.yaml`
 ```yaml
+# App configuration - Option 1: Install fresh each run (default)
 app: ./build/MyApp.app
 bundleId: com.example.myapp
+# installApp: true  # Optional: defaults to true
+
+# Option 2: Use existing app (preserves app state like pre-seeded data, logged-in users)
+# bundleId: com.example.myapp
+# installApp: false  # Skip installation, launch existing app
+
 flow: ./aperture-flow.yaml
 
 locales:
@@ -229,6 +236,10 @@ llm:
 mcp:
   endpoint: stdio://mobile-mcp
 ```
+
+**App Installation Modes**:
+- **Install Mode** (default): `installApp: true` or omitted. Installs app from `app` path each run. Use for clean app state.
+- **Existing App Mode**: `installApp: false`. Launches already-installed app by `bundleId`. Use to preserve app state (pre-seeded data, logged-in users, specific configurations). The `app` field is optional in this mode.
 
 ### Locale Data Files (`locales/{locale}.yaml`)
 ```yaml
