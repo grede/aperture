@@ -192,7 +192,7 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
         cloneSpinner.succeed('WebDriverAgent cloned successfully');
 
         // Get device name from config or use default
-        let deviceName = 'iPhone 15 Pro Max';
+        let deviceName = 'iPhone 17 Pro Max';
 
         try {
           const configPath = resolve(process.cwd(), 'aperture.config.yaml');
@@ -250,7 +250,7 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
           console.log(chalk.green('\n✓ WebDriverAgent cloned successfully\n'));
 
           // Get device name from config or prompt
-          let deviceName = 'iPhone 15 Pro Max';
+          let deviceName = 'iPhone 17 Pro Max';
 
           try {
             const configPath = resolve(process.cwd(), 'aperture.config.yaml');
@@ -266,7 +266,7 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
                 type: 'input',
                 name: 'device',
                 message: 'Enter the iOS Simulator device name to build for:',
-                default: 'iPhone 15 Pro Max',
+                default: 'iPhone 17 Pro Max',
               },
             ]);
             deviceName = device;
