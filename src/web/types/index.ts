@@ -26,6 +26,7 @@ export type FrameMode = 'none' | 'minimal' | 'realistic';
  * Optional frame mode overrides per device type
  */
 export type FrameModesByDevice = Partial<Record<DeviceType, FrameMode>>;
+export type FrameAssetFilesByDevice = Partial<Record<DeviceType, string>>;
 
 /**
  * App entity
@@ -72,6 +73,7 @@ export interface GenerationConfig {
   template_style: TemplateStyle;
   frame_mode: FrameMode;
   frame_modes?: FrameModesByDevice;
+  frame_asset_files?: FrameAssetFilesByDevice;
 }
 
 /**
@@ -169,6 +171,7 @@ export interface StartGenerationRequest {
   template_style: TemplateStyle;
   frame_mode: FrameMode;
   frame_modes?: FrameModesByDevice;
+  frame_asset_files?: FrameAssetFilesByDevice;
 }
 
 /**

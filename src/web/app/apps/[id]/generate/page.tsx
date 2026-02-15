@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import {
   TEMPLATE_STYLES,
   TEMPLATE_STYLE_INFO,
-  FRAME_MODES,
   DEVICE_TYPE_LABELS,
   SUPPORTED_LOCALES,
 } from '@/lib/constants';
@@ -18,6 +17,7 @@ import type {
   AppWithScreens,
   CopiesByScreenAndLocale,
   DeviceType,
+  FrameAssetFilesByDevice,
   FrameMode,
   FrameModesByDevice,
 } from '@/types';
@@ -43,7 +43,27 @@ function bufferToBase64(buffer: ArrayBuffer): string {
   return window.btoa(binary);
 }
 
-function FrameModePreview({ deviceType, mode }: { deviceType: DeviceType; mode: FrameMode }) {
+function buildFramePreviewPath(deviceType: DeviceType, frameFile?: string): string {
+  const params = new URLSearchParams({ device_type: deviceType });
+  if (frameFile) {
+    params.set('frame_file', frameFile);
+  }
+  return `/api/frame-assets/preview?${params.toString()}`;
+}
+
+function frameFileLabel(frameFile: string): string {
+  return frameFile.replace(/\.png$/i, '');
+}
+
+function FrameModePreview({
+  deviceType,
+  mode,
+  frameFile,
+}: {
+  deviceType: DeviceType;
+  mode: FrameMode;
+  frameFile?: string;
+}) {
   const isTablet = deviceType === 'iPad' || deviceType === 'Android-tablet';
   const width = isTablet ? 66 : 48;
   const height = isTablet ? 86 : 94;
@@ -65,20 +85,18 @@ function FrameModePreview({ deviceType, mode }: { deviceType: DeviceType; mode: 
   }
 
   if (mode === 'realistic') {
-    const framePreviewPath = `/api/frame-assets/preview?device_type=${encodeURIComponent(deviceType)}`;
+    const framePreviewPath = buildFramePreviewPath(deviceType, frameFile);
     return (
       <div className="mb-2 flex h-24 items-center justify-center">
-        <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-lg border border-input bg-muted/40">
-          <img
-            src={framePreviewPath}
-            alt={`${deviceType} realistic frame preview`}
-            className="h-full w-full object-contain p-1"
-            loading="lazy"
-            onError={(event) => {
-              event.currentTarget.style.display = 'none';
-            }}
-          />
-        </div>
+        <img
+          src={framePreviewPath}
+          alt={`${deviceType} realistic frame preview`}
+          className="max-h-[84px] w-auto object-contain"
+          loading="lazy"
+          onError={(event) => {
+            event.currentTarget.style.display = 'none';
+          }}
+        />
       </div>
     );
   }
@@ -116,6 +134,14 @@ export default function GeneratePage() {
   const [selectedLocales, setSelectedLocales] = useState<string[]>([]);
   const [templateStyle, setTemplateStyle] = useState('modern');
   const [frameModesByDevice, setFrameModesByDevice] = useState<FrameModesByDevice>({});
+  const [frameAssetFilesByDevice, setFrameAssetFilesByDevice] = useState<
+    Partial<Record<DeviceType, string[]>>
+  >({});
+  const [selectedFrameAssetFilesByDevice, setSelectedFrameAssetFilesByDevice] =
+    useState<FrameAssetFilesByDevice>({});
+  const [frameFilesLoadingByDevice, setFrameFilesLoadingByDevice] = useState<
+    Partial<Record<DeviceType, boolean>>
+  >({});
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,6 +189,66 @@ export default function GeneratePage() {
   }, [app, availableDevices, availableLocales]);
 
   useEffect(() => {
+    if (selectedDevices.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadFrameFilesForDevice = async (deviceType: DeviceType) => {
+      setFrameFilesLoadingByDevice((prev) => ({ ...prev, [deviceType]: true }));
+
+      try {
+        const response = await fetch(
+          `/api/frame-assets/options?device_type=${encodeURIComponent(deviceType)}`
+        );
+        if (!response.ok) {
+          throw new Error(`Failed to load frame options for ${deviceType}`);
+        }
+
+        const payload = await response.json();
+        const frameFiles = Array.isArray(payload?.data?.files)
+          ? (payload.data.files as string[])
+          : [];
+
+        if (cancelled) return;
+
+        setFrameAssetFilesByDevice((prev) => ({ ...prev, [deviceType]: frameFiles }));
+        setSelectedFrameAssetFilesByDevice((prev) => {
+          const currentSelection = prev[deviceType];
+          const nextSelection =
+            currentSelection && frameFiles.includes(currentSelection)
+              ? currentSelection
+              : frameFiles[0];
+
+          const next = { ...prev };
+          if (nextSelection) {
+            next[deviceType] = nextSelection;
+          } else {
+            delete next[deviceType];
+          }
+          return next;
+        });
+      } catch {
+        if (cancelled) return;
+        setFrameAssetFilesByDevice((prev) => ({ ...prev, [deviceType]: [] }));
+      } finally {
+        if (!cancelled) {
+          setFrameFilesLoadingByDevice((prev) => ({ ...prev, [deviceType]: false }));
+        }
+      }
+    };
+
+    Promise.all(selectedDevices.map((deviceType) => loadFrameFilesForDevice(deviceType))).catch(
+      () => {}
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDevices]);
+
+  useEffect(() => {
     const generatePreview = async () => {
       if (!app || selectedDevices.length === 0) {
         setPreviewImage(null);
@@ -198,6 +284,11 @@ export default function GeneratePage() {
 
         const imageBuffer = await imageResponse.arrayBuffer();
         const screenshotBase64 = bufferToBase64(imageBuffer);
+        const previewFrameMode = frameModesByDevice[previewDevice] || 'minimal';
+        const previewFrameAssetFile =
+          previewFrameMode === 'realistic'
+            ? selectedFrameAssetFilesByDevice[previewDevice]
+            : undefined;
 
         const previewResponse = await fetch('/api/templates/preview', {
           method: 'POST',
@@ -208,7 +299,8 @@ export default function GeneratePage() {
             device_type: previewDevice,
             title: defaultCopy.title,
             subtitle: defaultCopy.subtitle || '',
-            frame_mode: frameModesByDevice[previewDevice] || 'minimal',
+            frame_mode: previewFrameMode,
+            frame_asset_file: previewFrameAssetFile,
           }),
         });
 
@@ -231,7 +323,14 @@ export default function GeneratePage() {
     };
 
     generatePreview();
-  }, [app, copies, selectedDevices, templateStyle, frameModesByDevice]);
+  }, [
+    app,
+    copies,
+    selectedDevices,
+    templateStyle,
+    frameModesByDevice,
+    selectedFrameAssetFilesByDevice,
+  ]);
 
   const loadData = async () => {
     setLoading(true);
@@ -282,14 +381,23 @@ export default function GeneratePage() {
     setFrameModesByDevice((prev) => ({ ...prev, [deviceType]: frameMode }));
   };
 
+  const setDeviceFrameAssetFile = (deviceType: DeviceType, frameAssetFile: string) => {
+    setSelectedFrameAssetFilesByDevice((prev) => ({ ...prev, [deviceType]: frameAssetFile }));
+  };
+
   const startGeneration = async () => {
     setGenerating(true);
     setError(null);
 
     try {
       const selectedDeviceFrameModes: FrameModesByDevice = {};
+      const selectedDeviceFrameAssets: FrameAssetFilesByDevice = {};
       selectedDevices.forEach((deviceType) => {
         selectedDeviceFrameModes[deviceType] = frameModesByDevice[deviceType] || 'minimal';
+        const selectedFrameAssetFile = selectedFrameAssetFilesByDevice[deviceType];
+        if (selectedFrameAssetFile) {
+          selectedDeviceFrameAssets[deviceType] = selectedFrameAssetFile;
+        }
       });
 
       const response = await fetch(`/api/apps/${appId}/generate`, {
@@ -301,6 +409,10 @@ export default function GeneratePage() {
           template_style: templateStyle,
           frame_mode: 'minimal',
           frame_modes: selectedDeviceFrameModes,
+          frame_asset_files:
+            Object.keys(selectedDeviceFrameAssets).length > 0
+              ? selectedDeviceFrameAssets
+              : undefined,
         }),
       });
 
@@ -389,23 +501,73 @@ export default function GeneratePage() {
               <div key={deviceType}>
                 <Label className="mb-2 block">{DEVICE_TYPE_LABELS[deviceType]}</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {FRAME_MODES.map((mode) => (
-                    <button
-                      key={`${deviceType}-${mode.value}`}
-                      type="button"
-                      onClick={() => setDeviceFrameMode(deviceType, mode.value)}
-                      className={`rounded-lg border p-3 text-left transition-colors ${
-                        (frameModesByDevice[deviceType] || 'minimal') === mode.value
-                          ? 'border-primary bg-primary/10'
-                          : 'border-input hover:bg-accent'
-                      }`}
-                    >
-                      <FrameModePreview deviceType={deviceType} mode={mode.value} />
-                      <p className="font-medium text-sm">{mode.label}</p>
-                      <p className="text-xs text-muted-foreground">{mode.description}</p>
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setDeviceFrameMode(deviceType, 'none')}
+                    className={`rounded-lg border p-3 text-left transition-colors min-h-[172px] ${
+                      (frameModesByDevice[deviceType] || 'minimal') === 'none'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-input hover:bg-accent'
+                    }`}
+                  >
+                    <FrameModePreview deviceType={deviceType} mode="none" />
+                    <p className="font-medium text-sm">No Frame</p>
+                    <p className="text-xs text-muted-foreground">
+                      Screenshot only, no device bezel
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDeviceFrameMode(deviceType, 'minimal')}
+                    className={`rounded-lg border p-3 text-left transition-colors min-h-[172px] ${
+                      (frameModesByDevice[deviceType] || 'minimal') === 'minimal'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-input hover:bg-accent'
+                    }`}
+                  >
+                    <FrameModePreview deviceType={deviceType} mode="minimal" />
+                    <p className="font-medium text-sm">Minimal Frame</p>
+                    <p className="text-xs text-muted-foreground">
+                      Simple procedural device outline
+                    </p>
+                  </button>
+
+                  {(frameAssetFilesByDevice[deviceType] || []).map((fileName) => {
+                    const isSelected =
+                      (frameModesByDevice[deviceType] || 'minimal') === 'realistic' &&
+                      selectedFrameAssetFilesByDevice[deviceType] === fileName;
+
+                    return (
+                      <button
+                        key={`${deviceType}-${fileName}`}
+                        type="button"
+                        onClick={() => {
+                          setDeviceFrameMode(deviceType, 'realistic');
+                          setDeviceFrameAssetFile(deviceType, fileName);
+                        }}
+                        className={`rounded-lg border p-3 text-left transition-colors min-h-[172px] ${
+                          isSelected
+                            ? 'border-primary bg-primary/10'
+                            : 'border-input hover:bg-accent'
+                        }`}
+                      >
+                        <FrameModePreview
+                          deviceType={deviceType}
+                          mode="realistic"
+                          frameFile={fileName}
+                        />
+                        <p className="font-medium text-sm break-words">
+                          {frameFileLabel(fileName)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Real device frame</p>
+                      </button>
+                    );
+                  })}
                 </div>
+                {frameFilesLoadingByDevice[deviceType] && (
+                  <p className="mt-2 text-xs text-muted-foreground">Loading frame options...</p>
+                )}
               </div>
             ))}
           </CardContent>

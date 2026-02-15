@@ -3,11 +3,7 @@
  */
 
 import { TemplateEngine } from '../../templates/engine';
-import type {
-  TemplateStyle,
-  TemplateDeviceType,
-  TemplateFrameMode,
-} from '../../types';
+import type { TemplateStyle, TemplateDeviceType, TemplateFrameMode } from '../../types';
 
 /**
  * Template service for generating marketing screenshots
@@ -37,7 +33,8 @@ export class TemplateService {
     title: string,
     subtitle: string,
     locale: string,
-    frameMode: TemplateFrameMode = 'minimal'
+    frameMode: TemplateFrameMode = 'minimal',
+    frameAssetFile?: string
   ): Promise<Buffer> {
     return this.engine.composite({
       screenshot: screenshotBuffer,
@@ -48,6 +45,7 @@ export class TemplateService {
       locale,
       frameMode,
       frameAssetsDir: process.env.FRAME_ASSETS_DIR,
+      realisticFrameFile: frameAssetFile,
     });
   }
 
@@ -75,7 +73,8 @@ export class TemplateService {
     deviceType: TemplateDeviceType,
     title: string,
     subtitle: string,
-    frameMode: TemplateFrameMode = 'minimal'
+    frameMode: TemplateFrameMode = 'minimal',
+    frameAssetFile?: string
   ): Promise<Buffer> {
     return this.engine.composite({
       screenshot: screenshotBuffer,
@@ -86,6 +85,7 @@ export class TemplateService {
       locale: 'en', // Preview always in English
       frameMode,
       frameAssetsDir: process.env.FRAME_ASSETS_DIR,
+      realisticFrameFile: frameAssetFile,
     });
   }
 }

@@ -318,7 +318,8 @@ export class TemplateEngine {
     const frameAsset = await this.loadRealisticFrameAsset(
       options.deviceType,
       options.frameAssetsDir,
-      targetScreenAspect
+      targetScreenAspect,
+      options.realisticFrameFile
     );
     if (!frameAsset) {
       return null;
@@ -380,12 +381,14 @@ export class TemplateEngine {
   private async loadRealisticFrameAsset(
     deviceType: TemplateDeviceType,
     assetsDir?: string,
-    targetScreenAspect?: number
+    targetScreenAspect?: number,
+    preferredFileName?: string
   ): Promise<RealisticFrameAsset | null> {
     return resolveRealisticFrameAsset({
       deviceType,
       assetsDir,
       targetScreenAspect,
+      preferredFileName,
     });
   }
 

@@ -14,8 +14,6 @@ import {
 } from '../lib/db';
 import { readUpload, saveGeneration } from '../lib/storage';
 import { DEVICE_TYPE_TO_TEMPLATE } from '../lib/constants';
-import type { TemplateDeviceType } from '../../types';
-import type { DeviceType } from '../types';
 
 /**
  * Generation service for orchestrating screenshot generation
@@ -39,7 +37,8 @@ export class GenerationService {
       updateGenerationStatus(generationId, 'processing', 0);
 
       const { app_id, config } = generation;
-      const { devices, locales, template_style, frame_mode, frame_modes } = config;
+      const { devices, locales, template_style, frame_mode, frame_modes, frame_asset_files } =
+        config;
 
       // Fetch app for validation
       const app = getAppById(app_id);
@@ -55,9 +54,7 @@ export class GenerationService {
       }
 
       // Filter screens by requested device types
-      const relevantScreens = screens.filter((screen) =>
-        devices.includes(screen.device_type)
-      );
+      const relevantScreens = screens.filter((screen) => devices.includes(screen.device_type));
 
       if (relevantScreens.length === 0) {
         throw new Error('No screens match the selected device types');
@@ -74,9 +71,7 @@ export class GenerationService {
             // Check if copy exists for this screen + locale
             const copy = getCopy(screen.id, locale);
             if (!copy) {
-              console.warn(
-                `Skipping screen ${screen.id} for locale ${locale}: No copy found`
-              );
+              console.warn(`Skipping screen ${screen.id} for locale ${locale}: No copy found`);
               completedTasks++;
               const progress = Math.round((completedTasks / totalTasks) * 100);
               updateGenerationProgress(generationId, progress);
@@ -88,8 +83,11 @@ export class GenerationService {
 
             // Map device type to template device type
             const templateDeviceType = DEVICE_TYPE_TO_TEMPLATE[screen.device_type];
-            const resolvedFrameMode =
-              frame_modes?.[screen.device_type] ?? frame_mode ?? 'minimal';
+            const resolvedFrameMode = frame_modes?.[screen.device_type] ?? frame_mode ?? 'minimal';
+            const resolvedFrameAssetFile =
+              resolvedFrameMode === 'realistic'
+                ? frame_asset_files?.[screen.device_type]
+                : undefined;
 
             // Generate composited image
             const outputBuffer = await this.templateService.generateScreenshot(
@@ -99,16 +97,12 @@ export class GenerationService {
               copy.title,
               copy.subtitle || '',
               locale,
-              resolvedFrameMode
+              resolvedFrameMode,
+              resolvedFrameAssetFile
             );
 
             // Save generated image
-            const outputPath = await saveGeneration(
-              generationId,
-              locale,
-              screen.id,
-              outputBuffer
-            );
+            const outputPath = await saveGeneration(generationId, locale, screen.id, outputBuffer);
 
             // Record in database
             createGeneratedScreenshot(generationId, screen.id, locale, outputPath);
@@ -118,10 +112,7 @@ export class GenerationService {
             const progress = Math.round((completedTasks / totalTasks) * 100);
             updateGenerationProgress(generationId, progress);
           } catch (error: any) {
-            console.error(
-              `Error processing screen ${screen.id} for locale ${locale}:`,
-              error
-            );
+            console.error(`Error processing screen ${screen.id} for locale ${locale}:`, error);
             // Continue with next task even if one fails
             completedTasks++;
             const progress = Math.round((completedTasks / totalTasks) * 100);

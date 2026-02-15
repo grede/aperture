@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { DEVICE_TYPES, TEMPLATE_STYLES, FRAME_MODES, SUPPORTED_LOCALES } from './constants';
+import { SUPPORTED_LOCALES } from './constants';
 
 /**
  * Device type schema
@@ -27,14 +27,23 @@ export const frameModesByDeviceSchema = z
     'Android-tablet': frameModeSchema.optional(),
   })
   .strict();
+export const frameAssetFilesByDeviceSchema = z
+  .object({
+    iPhone: z.string().min(1).optional(),
+    iPad: z.string().min(1).optional(),
+    'Android-phone': z.string().min(1).optional(),
+    'Android-tablet': z.string().min(1).optional(),
+  })
+  .strict();
 
 /**
  * Locale code schema (validates against supported locales)
  */
-export const localeSchema = z.string().refine(
-  (locale) => SUPPORTED_LOCALES.some((l) => l.code === locale),
-  { message: 'Invalid locale code' }
-);
+export const localeSchema = z
+  .string()
+  .refine((locale) => SUPPORTED_LOCALES.some((l) => l.code === locale), {
+    message: 'Invalid locale code',
+  });
 
 /**
  * Create app request schema
@@ -127,6 +136,7 @@ export const startGenerationSchema = z.object({
   template_style: templateStyleSchema,
   frame_mode: frameModeSchema,
   frame_modes: frameModesByDeviceSchema.optional(),
+  frame_asset_files: frameAssetFilesByDeviceSchema.optional(),
 });
 
 /**
@@ -139,6 +149,7 @@ export const templatePreviewSchema = z.object({
   title: z.string().min(1).max(30),
   subtitle: z.string().max(80).optional(),
   frame_mode: frameModeSchema.optional().default('minimal'),
+  frame_asset_file: z.string().min(1).optional(),
 });
 
 /**

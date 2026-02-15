@@ -95,6 +95,7 @@ export interface CompositeOptions {
   locale: string;
   frameMode?: TemplateFrameMode;
   frameAssetsDir?: string;
+  realisticFrameFile?: string;
 }
 
 // ── Cost Tracker Types ─────────────────────────────────────────

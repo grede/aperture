@@ -1,1 +1,5 @@
-export { resolveFrameAssetsDir, resolveRealisticFrameAsset } from './realistic-frame-assets.ts';
+export {
+  resolveFrameAssetsDir,
+  resolveRealisticFrameAsset,
+  listRealisticFrameAssetFiles,
+} from './realistic-frame-assets.ts';

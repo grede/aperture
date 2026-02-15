@@ -19,10 +19,7 @@ import {
  * POST /api/apps/:id/generate
  * Start a screenshot generation job
  */
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const routeParams = await context.params;
     const appId = getIdFromParams(routeParams);
@@ -43,6 +40,7 @@ export async function POST(
       template_style: validated.template_style,
       frame_mode: validated.frame_mode,
       frame_modes: validated.frame_modes,
+      frame_asset_files: validated.frame_asset_files,
     });
 
     // Start generation asynchronously

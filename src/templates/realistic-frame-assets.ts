@@ -29,10 +29,6 @@ interface RealisticFrameCandidate {
 
 const TRANSPARENCY_THRESHOLD = 10;
 const DEFAULT_FRAME_ASSETS_DIR = 'device_frames';
-const IPHONE_PREFERRED_FRAME_FILES = [
-  'iphone 17 pro - silver - portrait.png',
-  'apple iphone 17 pro - silver - portrait.png',
-];
 const DEFAULT_SCREEN_ASPECT: Record<TemplateDeviceType, number> = {
   iPhone: 430 / 932,
   iPad: 3 / 4,
@@ -64,6 +60,7 @@ export async function resolveRealisticFrameAsset(options: {
   deviceType: TemplateDeviceType;
   assetsDir?: string;
   targetScreenAspect?: number;
+  preferredFileName?: string;
 }): Promise<RealisticFrameAsset | null> {
   const assetsDir = await resolveFrameAssetsDir(options.assetsDir);
   if (!assetsDir) {
@@ -75,25 +72,24 @@ export async function resolveRealisticFrameAsset(options: {
     return null;
   }
 
-  const targetAspect = options.targetScreenAspect ?? DEFAULT_SCREEN_ASPECT[options.deviceType];
-  const preferredCandidate =
-    options.deviceType === 'iPhone'
-      ? candidates.find((candidate) => {
-          const lower = candidate.fileName.toLowerCase();
-          return IPHONE_PREFERRED_FRAME_FILES.includes(lower) || lower.includes('pro max');
-        })
-      : undefined;
-  if (preferredCandidate) {
-    const overlay = await readOverlayBuffer(preferredCandidate.filePath);
-    return {
-      overlay,
-      overlayWidth: preferredCandidate.overlayWidth,
-      overlayHeight: preferredCandidate.overlayHeight,
-      screen: preferredCandidate.screen,
-      sourceFile: preferredCandidate.fileName,
-    };
+  if (options.preferredFileName) {
+    const preferredCandidate = candidates.find(
+      (candidate) =>
+        candidate.fileName.toLowerCase() === options.preferredFileName?.trim().toLowerCase()
+    );
+    if (preferredCandidate) {
+      const overlay = await readOverlayBuffer(preferredCandidate.filePath);
+      return {
+        overlay,
+        overlayWidth: preferredCandidate.overlayWidth,
+        overlayHeight: preferredCandidate.overlayHeight,
+        screen: preferredCandidate.screen,
+        sourceFile: preferredCandidate.fileName,
+      };
+    }
   }
 
+  const targetAspect = options.targetScreenAspect ?? DEFAULT_SCREEN_ASPECT[options.deviceType];
   const selectedCandidate = candidates.slice().sort((a, b) => {
     const aAspect = a.screen.width / a.screen.height;
     const bAspect = b.screen.width / b.screen.height;
@@ -118,6 +114,21 @@ export async function resolveRealisticFrameAsset(options: {
     screen: selectedCandidate.screen,
     sourceFile: selectedCandidate.fileName,
   };
+}
+
+export async function listRealisticFrameAssetFiles(options: {
+  deviceType: TemplateDeviceType;
+  assetsDir?: string;
+}): Promise<string[]> {
+  const assetsDir = await resolveFrameAssetsDir(options.assetsDir);
+  if (!assetsDir) {
+    return [];
+  }
+
+  const candidates = await loadFrameCandidates(assetsDir, options.deviceType);
+  return candidates
+    .map((candidate) => candidate.fileName)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 }
 
 async function loadFrameCandidates(

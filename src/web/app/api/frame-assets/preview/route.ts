@@ -20,6 +20,7 @@ function isSupportedDeviceType(value: string): value is SupportedDeviceType {
 
 export async function GET(request: NextRequest) {
   const deviceTypeParam = request.nextUrl.searchParams.get('device_type');
+  const frameFileParam = request.nextUrl.searchParams.get('frame_file')?.trim() || undefined;
   if (!deviceTypeParam || !isSupportedDeviceType(deviceTypeParam)) {
     return new Response('Invalid device_type', { status: 400 });
   }
@@ -28,6 +29,7 @@ export async function GET(request: NextRequest) {
   const frameAsset = await resolveRealisticFrameAsset({
     deviceType: config.templateDeviceType,
     targetScreenAspect: config.targetScreenAspect,
+    preferredFileName: frameFileParam,
   });
 
   if (!frameAsset) {
