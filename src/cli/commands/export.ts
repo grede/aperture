@@ -4,12 +4,19 @@ import chalk from 'chalk';
 import ora from 'ora';
 import YAML from 'yaml';
 import { TemplateEngine } from '../../templates/engine.js';
-import type { ApertureConfig, TemplateStyle } from '../../types/index.js';
+import type {
+  ApertureConfig,
+  TemplateStyle,
+  TemplateFrameMode,
+  TemplateDeviceType,
+} from '../../types/index.js';
 
 interface ExportOptions {
   style?: TemplateStyle;
   locale?: string;
-  device?: 'iphone' | 'ipad' | 'both';
+  device?: 'iphone' | 'ipad' | 'android' | 'both' | 'all';
+  frame?: TemplateFrameMode;
+  frameAssets?: string;
 }
 
 interface LocaleCopy {
@@ -35,16 +42,23 @@ export async function exportCommand(options: ExportOptions): Promise<void> {
   }
 
   const style = options.style ?? config.template.style;
+  const frameMode = options.frame ?? config.template.frame?.mode ?? 'minimal';
+  const frameAssetsDir = options.frameAssets
+    ? resolve(process.cwd(), options.frameAssets)
+    : config.template.frame?.assetsDir
+      ? resolve(process.cwd(), config.template.frame.assetsDir)
+      : undefined;
   const locales = options.locale ? [options.locale] : config.locales;
-  const devices = options.device === 'iphone'
-    ? ['iphone' as const]
-    : options.device === 'ipad'
-    ? ['ipad' as const]
-    : ['iphone' as const, 'ipad' as const];
+  const devices = resolveExportDevices(options.device, config);
 
   const templateEngine = new TemplateEngine();
   let totalExported = 0;
   let totalFailed = 0;
+
+  if (frameMode === 'realistic' && !frameAssetsDir) {
+    console.log(chalk.yellow('  ⚠ Frame mode is realistic, but no frame assets directory is configured.'));
+    console.log(chalk.dim('    Falling back to minimal generated frames where assets are missing.\n'));
+  }
 
   // Process each locale and device
   for (const locale of locales) {
@@ -98,10 +112,12 @@ export async function exportCommand(options: ExportOptions): Promise<void> {
             const exportBuffer = await templateEngine.composite({
               screenshot: screenshotBuffer,
               style,
-              deviceType: deviceType === 'iphone' ? 'iPhone' : 'iPad',
+              deviceType: toTemplateDeviceType(deviceType),
               title: copy.title,
               subtitle: copy.subtitle,
               locale,
+              frameMode,
+              frameAssetsDir,
             });
 
             // Save exported image
@@ -129,7 +145,27 @@ export async function exportCommand(options: ExportOptions): Promise<void> {
   if (totalFailed > 0) {
     console.log(`  Failed: ${chalk.red(totalFailed)} image(s)`);
   }
-  console.log(`  Style: ${chalk.cyan(style)}\n`);
+  console.log(`  Style: ${chalk.cyan(style)}`);
+  console.log(`  Frame: ${chalk.cyan(frameMode)}\n`);
 
   process.exit(totalFailed > 0 ? 1 : 0);
+}
+
+function resolveExportDevices(
+  selection: ExportOptions['device'],
+  config: ApertureConfig
+): Array<'iphone' | 'ipad' | 'android'> {
+  if (selection === 'iphone') return ['iphone'];
+  if (selection === 'ipad') return ['ipad'];
+  if (selection === 'android') return ['android'];
+  if (selection === 'all') return ['iphone', 'ipad', 'android'];
+
+  // Preserve previous default behavior while respecting optional iPad configuration.
+  return config.devices.ipad ? ['iphone', 'ipad'] : ['iphone'];
+}
+
+function toTemplateDeviceType(device: 'iphone' | 'ipad' | 'android'): TemplateDeviceType {
+  if (device === 'iphone') return 'iPhone';
+  if (device === 'ipad') return 'iPad';
+  return 'Android';
 }

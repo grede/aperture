@@ -66,7 +66,9 @@ program
   .description('Composite screenshots into store-ready images')
   .option('--style <style>', 'Template style (minimal|modern|gradient|dark|playful)')
   .option('--locale <locale>', 'Export for a single locale only')
-  .option('--device <type>', 'Export for specific device (iphone|ipad|both)', 'both')
+  .option('--device <type>', 'Export for specific device (iphone|ipad|android|both|all)', 'both')
+  .option('--frame <mode>', 'Frame mode (none|minimal|realistic)')
+  .option('--frame-assets <dir>', 'Path to realistic frame assets directory')
   .action(exportCommand);
 
 // Generate-data command

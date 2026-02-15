@@ -21,6 +21,9 @@ devices:
 # Template style for final export
 template:
   style: modern # minimal | modern | gradient | dark | playful
+  frame:
+    mode: minimal # none | minimal | realistic
+    # assetsDir: ./templates/frames # Required for realistic mode (expects iphone.png/ipad.png/android.png + matching .json metadata)
 
 # Output directory for screenshots
 output: ./aperture-output

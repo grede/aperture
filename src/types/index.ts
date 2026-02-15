@@ -83,14 +83,18 @@ export interface LocaleData {
 // ── Template Engine Types ──────────────────────────────────────
 
 export type TemplateStyle = 'minimal' | 'modern' | 'gradient' | 'dark' | 'playful';
+export type TemplateFrameMode = 'none' | 'minimal' | 'realistic';
+export type TemplateDeviceType = 'iPhone' | 'iPad' | 'Android';
 
 export interface CompositeOptions {
   screenshot: Buffer;
   style: TemplateStyle;
-  deviceType: 'iPhone' | 'iPad';
+  deviceType: TemplateDeviceType;
   title: string;
   subtitle?: string;
   locale: string;
+  frameMode?: TemplateFrameMode;
+  frameAssetsDir?: string;
 }
 
 // ── Cost Tracker Types ─────────────────────────────────────────
@@ -111,9 +115,14 @@ export interface ApertureConfig {
   devices: {
     iphone: string;
     ipad?: string; // Optional: user can skip iPad screenshots
+    android?: string; // Optional: reserved for Android export workflows
   };
   template: {
     style: TemplateStyle;
+    frame?: {
+      mode?: TemplateFrameMode;
+      assetsDir?: string;
+    };
   };
   output: string;
   guardrails: {

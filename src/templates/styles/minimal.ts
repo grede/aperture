@@ -1,5 +1,3 @@
-import type { CompositeOptions } from '../../types/index.js';
-
 export interface StyleConfig {
   backgroundColor: string;
   deviceFramePadding: number;

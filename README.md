@@ -80,6 +80,32 @@ aperture run
 | `aperture generate-data` | Generate locale-specific test data |
 | `aperture generate-copy` | Generate localized marketing copy |
 
+### Export Frame Modes
+
+`aperture export` supports:
+- `--frame minimal` (default): generated vector frames for iPhone, iPad, Android
+- `--frame none`: screenshot-only layout
+- `--frame realistic`: loads device frame assets from `template.frame.assetsDir` or `--frame-assets`
+
+Realistic assets expect per-device files:
+- `iphone.png` + `iphone.json`
+- `ipad.png` + `ipad.json`
+- `android.png` + `android.json`
+
+Each `*.json` file must define a screen rectangle:
+
+```json
+{
+  "screen": {
+    "x": 120,
+    "y": 210,
+    "width": 1000,
+    "height": 2160,
+    "cornerRadius": 110
+  }
+}
+```
+
 ## Architecture
 
 ```
