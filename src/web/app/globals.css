@@ -4,70 +4,54 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
-  }
+    /* Force dark mode - dark-only slate palette with indigo accent */
+    --background: 215 20% 7%;         /* slate-950 darker */
+    --foreground: 210 40% 98%;        /* slate-50 */
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 215 25% 10%;              /* slate-900 with slight warmth */
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+
+    --popover: 215 25% 10%;
     --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
+
+    --primary: 238 83.5% 66.7%;       /* indigo-500 */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 215 19% 16.5%;       /* slate-800 */
     --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
+
+    --muted: 215 19% 16.5%;           /* slate-800 */
+    --muted-foreground: 215 16.3% 56.9%;  /* slate-400 */
+
+    --accent: 215 19% 16.5%;          /* slate-800 */
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
+
+    --destructive: 0 62.8% 50.6%;     /* red-600 darker */
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+
+    --border: 215 20% 20%;            /* slate-800 subtle */
+    --input: 215 20% 20%;
+    --ring: 238 83.5% 66.7%;          /* indigo-500 */
+
+    --radius: 0.5rem;                 /* 8px - slightly sharper than default */
   }
 }
 
 @layer base {
   * {
-    border-color: hsl(var(--border));
-  }
-  body {
-    background:
-      radial-gradient(circle at 10% 10%, rgba(59, 130, 246, 0.08), transparent 40%),
-      radial-gradient(circle at 90% 0%, rgba(14, 165, 233, 0.06), transparent 35%),
-      radial-gradient(circle at 50% 100%, rgba(168, 85, 247, 0.04), transparent 40%),
-      linear-gradient(to bottom, #fafbff 0%, #ffffff 50%, #f9fafb 100%);
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    min-height: 100vh;
+    @apply border-border;
   }
 
+  body {
+    @apply bg-background text-foreground antialiased;
+    /* Remove gradient backgrounds for clean Linear/Vercel aesthetic */
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Smooth scrolling for modern browsers */
   @media (prefers-reduced-motion: no-preference) {
     * {
       scroll-behavior: smooth;
     }
   }
 }
-

@@ -136,22 +136,19 @@ export default function AppDetailsPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-12 px-6">
-        <div className="space-y-4 max-w-3xl">
-          <div className="h-8 w-48 bg-gray-200 rounded-lg animate-pulse" />
-          <div className="h-4 w-96 bg-gray-200 rounded animate-pulse" />
-          <div className="h-64 bg-gray-200 rounded-xl animate-pulse" />
-        </div>
+      <div className="space-y-4 max-w-3xl">
+        <div className="h-8 w-48 bg-secondary rounded-lg animate-pulse" />
+        <div className="h-4 w-96 bg-secondary rounded animate-pulse" />
+        <div className="h-64 bg-secondary rounded-xl animate-pulse" />
       </div>
     );
   }
 
   if (!app) {
     return (
-      <div className="container mx-auto py-16 px-6 text-center">
-        <div className="text-6xl mb-4">😕</div>
-        <h2 className="text-2xl font-bold mb-2">App Not Found</h2>
-        <p className="text-muted-foreground mb-6">
+      <div className="py-16 text-center">
+        <h2 className="text-lg font-medium mb-2">App Not Found</h2>
+        <p className="text-sm text-muted-foreground mb-6">
           The app you're looking for doesn't exist
         </p>
         <Link href="/">
@@ -162,32 +159,30 @@ export default function AppDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <div className="border-b bg-blue-50">
-        <div className="container mx-auto py-8 px-6">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div className="flex-1">
-              <h1 className="text-4xl font-bold mb-2">{app.name}</h1>
-              <p className="text-lg text-muted-foreground">{app.description}</p>
-            </div>
-            <div className="flex gap-2">
-              <Link href={`/apps/${app.id}/copies`}>
-                <Button variant="outline">
-                  Manage Copies
-                </Button>
-              </Link>
-              <Link href={`/apps/${app.id}/generate`}>
-                <Button>
-                  Generate Screenshots
-                </Button>
-              </Link>
-            </div>
+    <div>
+      {/* Minimal Header */}
+      <div className="mb-8">
+        <div className="flex flex-wrap items-start justify-between gap-6 mb-4">
+          <div className="flex-1">
+            <h1 className="text-2xl font-semibold mb-1">{app.name}</h1>
+            <p className="text-sm text-muted-foreground">{app.description}</p>
+          </div>
+          <div className="flex gap-2">
+            <Link href={`/apps/${app.id}/copies`}>
+              <Button variant="outline" size="sm">
+                Manage Copies
+              </Button>
+            </Link>
+            <Link href={`/apps/${app.id}/generate`}>
+              <Button size="sm">
+                Generate Screenshots
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto py-8 px-6 space-y-6">
+      <div className="space-y-4">
 
       {/* Add Screen Card */}
       <Card>

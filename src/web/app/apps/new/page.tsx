@@ -137,15 +137,15 @@ export default function NewAppPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 px-4">
+    <div>
       <div className="mb-8">
-        <h1 className="text-4xl font-bold">Create New App</h1>
-        <p className="mt-2 text-muted-foreground">
-          Define app metadata, then upload raw screenshots and default English copy.
+        <h1 className="text-2xl font-semibold mb-1">Create New App</h1>
+        <p className="text-sm text-muted-foreground">
+          Define app metadata and upload screenshots with English copy
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-4xl">
         <Card>
           <CardHeader>
             <CardTitle>App Details</CardTitle>
@@ -200,8 +200,8 @@ export default function NewAppPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {screens.map((screen, index) => (
-              <Card key={screen.id} className="border-dashed">
-                <CardContent className="pt-6 space-y-4">
+              <Card key={screen.id} className="border-dashed border-slate-700">
+                <CardContent className="pt-6 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="font-medium">Screen {index + 1}</p>
                     {screens.length > 1 && (
