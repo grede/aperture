@@ -21,10 +21,11 @@ import {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const appId = getIdFromParams(params);
+    const routeParams = await context.params;
+    const appId = getIdFromParams(routeParams);
 
     // Verify app exists
     const app = getAppById(appId);
@@ -45,10 +46,11 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const appId = getIdFromParams(params);
+    const routeParams = await context.params;
+    const appId = getIdFromParams(routeParams);
 
     // Verify app exists
     const app = getAppById(appId);

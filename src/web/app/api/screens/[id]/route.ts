@@ -21,10 +21,11 @@ import {
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = getIdFromParams(params);
+    const routeParams = await context.params;
+    const id = getIdFromParams(routeParams);
     const body = await parseBody(request);
     const validated = updateScreenSchema.parse(body);
 
@@ -49,10 +50,11 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = getIdFromParams(params);
+    const routeParams = await context.params;
+    const id = getIdFromParams(routeParams);
 
     // Check if screen exists
     const screen = getScreenById(id);

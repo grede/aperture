@@ -18,10 +18,11 @@ import {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = getIdFromParams(params);
+    const routeParams = await context.params;
+    const id = getIdFromParams(routeParams);
     const generation = getGenerationById(id);
 
     if (!generation) {

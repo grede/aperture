@@ -9,11 +9,12 @@ import { join } from 'path';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
   try {
+    const routeParams = await context.params;
     const generationsDir = process.env.GENERATIONS_DIR || './aperture-data/generations';
-    const filePath = join(process.cwd(), generationsDir, ...params.path);
+    const filePath = join(process.cwd(), generationsDir, ...routeParams.path);
 
     const buffer = await readFile(filePath);
 

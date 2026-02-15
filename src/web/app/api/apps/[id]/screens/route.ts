@@ -20,10 +20,11 @@ import {
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const appId = getIdFromParams(params);
+    const routeParams = await context.params;
+    const appId = getIdFromParams(routeParams);
 
     // Verify app exists
     const app = getAppById(appId);

@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { DEVICE_TYPES, TEMPLATE_STYLES, FRAME_MODES, SUPPORTED_LOCALES } from './constants.js';
+import { DEVICE_TYPES, TEMPLATE_STYLES, FRAME_MODES, SUPPORTED_LOCALES } from './constants';
 
 /**
  * Device type schema

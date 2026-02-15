@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { migrate } from './migrations.js';
+import { migrate } from './migrations';
 import type {
   App,
   Screen,
@@ -12,7 +12,7 @@ import type {
   AppWithScreens,
   CopiesByScreenAndLocale,
   GenerationWithScreenshots,
-} from '../types/index.js';
+} from '../types';
 import { join } from 'path';
 import { mkdirSync } from 'fs';
 

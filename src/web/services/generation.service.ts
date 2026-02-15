@@ -2,7 +2,7 @@
  * Generation service - orchestrates screenshot generation workflow
  */
 
-import { getTemplateService } from './template.service.js';
+import { getTemplateService } from './template.service';
 import {
   getGenerationById,
   updateGenerationStatus,
@@ -11,11 +11,11 @@ import {
   getCopy,
   createGeneratedScreenshot,
   getAppById,
-} from '../lib/db.js';
-import { readUpload, saveGeneration } from '../lib/storage.js';
-import { DEVICE_TYPE_TO_TEMPLATE } from '../lib/constants.js';
-import type { TemplateDeviceType } from '../../types/index.js';
-import type { DeviceType } from '../types/index.js';
+} from '../lib/db';
+import { readUpload, saveGeneration } from '../lib/storage';
+import { DEVICE_TYPE_TO_TEMPLATE } from '../lib/constants';
+import type { TemplateDeviceType } from '../../types';
+import type { DeviceType } from '../types';
 
 /**
  * Generation service for orchestrating screenshot generation

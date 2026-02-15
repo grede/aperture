@@ -2,8 +2,8 @@
  * Constants for device types, locales, templates, and other configuration
  */
 
-import type { DeviceType, TemplateStyle, FrameMode } from '../types/index.js';
-import type { TemplateDeviceType } from '../../types/index.js';
+import type { DeviceType, TemplateStyle, FrameMode } from '../types';
+import type { TemplateDeviceType } from '../../types';
 
 /**
  * Device types available in the system

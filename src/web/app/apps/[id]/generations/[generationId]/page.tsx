@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import type { GenerationWithScreenshots } from '@/types';
 
 export default function GenerationResultsPage() {
@@ -126,11 +125,13 @@ export default function GenerationResultsPage() {
                     <Badge variant="outline" className="text-xs">
                       {screenshot.locale}
                     </Badge>
-                    <Button variant="ghost" size="sm" asChild>
-                      <a href={`/api/generated-images/${screenshot.output_path}`} download>
-                        Download
-                      </a>
-                    </Button>
+                    <a
+                      href={`/api/generated-images/${screenshot.output_path}`}
+                      download
+                      className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      Download
+                    </a>
                   </div>
                 </CardContent>
               </Card>

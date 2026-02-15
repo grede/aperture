@@ -2,12 +2,12 @@
  * Template service - wraps TemplateEngine for web backend use
  */
 
-import { TemplateEngine } from '../../templates/engine.js';
+import { TemplateEngine } from '../../templates/engine';
 import type {
   TemplateStyle,
   TemplateDeviceType,
   TemplateFrameMode,
-} from '../../types/index.js';
+} from '../../types';
 
 /**
  * Template service for generating marketing screenshots

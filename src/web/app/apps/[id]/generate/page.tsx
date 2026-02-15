@@ -34,11 +34,13 @@ export default function GeneratePage() {
 
   const loadApp = async () => {
     const response = await fetch(`/api/apps/${appId}`);
-    const data = await response.json();
-    setApp(data.data);
+    const payload = (await response.json()) as { data: AppWithScreens };
+    setApp(payload.data);
 
     // Pre-select devices that have screens
-    const deviceTypes = new Set(data.data.screens.map((s: any) => s.device_type));
+    const deviceTypes = new Set(
+      payload.data.screens.map((screen) => screen.device_type)
+    );
     setSelectedDevices(Array.from(deviceTypes));
 
     setLoading(false);

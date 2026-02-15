@@ -2,7 +2,7 @@
  * Translation service - wraps TranslationService for web backend use
  */
 
-import { TranslationService as CoreTranslationService } from '../../localization/translation-service.js';
+import { TranslationService as CoreTranslationService } from '../../localization/translation-service';
 
 /**
  * Web translation service for AI-powered copy generation

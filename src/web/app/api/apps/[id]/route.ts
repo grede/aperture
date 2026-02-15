@@ -28,10 +28,11 @@ import { deleteAppUploads } from '@/lib/storage';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = getIdFromParams(params);
+    const routeParams = await context.params;
+    const id = getIdFromParams(routeParams);
     const app = getAppWithScreens(id);
 
     if (!app) {
@@ -50,10 +51,11 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = getIdFromParams(params);
+    const routeParams = await context.params;
+    const id = getIdFromParams(routeParams);
     const body = await parseBody(request);
     const validated = updateAppSchema.parse(body);
 
@@ -75,10 +77,11 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = getIdFromParams(params);
+    const routeParams = await context.params;
+    const id = getIdFromParams(routeParams);
 
     // Check if app exists
     const app = getAppById(id);
