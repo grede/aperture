@@ -1,18 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  TEMPLATE_STYLES,
-  TEMPLATE_STYLE_INFO,
-  DEVICE_TYPE_LABELS,
-  SUPPORTED_LOCALES,
-} from '@/lib/constants';
+import { DEVICE_TYPE_LABELS, SUPPORTED_LOCALES } from '@/lib/constants';
 import type {
   AppWithScreens,
   CopiesByScreenAndLocale,
@@ -20,7 +16,39 @@ import type {
   FrameAssetFilesByDevice,
   FrameMode,
   FrameModesByDevice,
+  TemplateBackground,
+  TemplateStyle,
 } from '@/types';
+
+const BACKGROUND_TEMPLATE_STYLE: TemplateStyle = 'modern';
+const HEX_COLOR_REGEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+const SOLID_COLOR_PRESETS = [
+  '#111827',
+  '#0F766E',
+  '#1D4ED8',
+  '#7C3AED',
+  '#DB2777',
+  '#EA580C',
+  '#DC2626',
+  '#84CC16',
+  '#F8FAFC',
+];
+const GRADIENT_PRESETS = [
+  { from: '#4A90E2', to: '#7B68EE', label: 'Indigo Sky' },
+  { from: '#FF6B6B', to: '#FFD93D', label: 'Sunset Pop' },
+  { from: '#0EA5E9', to: '#14B8A6', label: 'Blue Mint' },
+  { from: '#EC4899', to: '#8B5CF6', label: 'Berry Neon' },
+  { from: '#22C55E', to: '#3B82F6', label: 'Fresh Ocean' },
+  { from: '#F97316', to: '#EF4444', label: 'Warm Glow' },
+];
+
+function normalizeHexColor(value: string): string | null {
+  const trimmed = value.trim();
+  if (!HEX_COLOR_REGEX.test(trimmed)) {
+    return null;
+  }
+  return trimmed.toUpperCase();
+}
 
 function localeLabel(code: string): string {
   return SUPPORTED_LOCALES.find((locale) => locale.code === code)?.name || code;
@@ -132,7 +160,10 @@ export default function GeneratePage() {
   const [copies, setCopies] = useState<CopiesByScreenAndLocale>({});
   const [selectedDevices, setSelectedDevices] = useState<DeviceType[]>([]);
   const [selectedLocales, setSelectedLocales] = useState<string[]>([]);
-  const [templateStyle, setTemplateStyle] = useState('modern');
+  const [backgroundMode, setBackgroundMode] = useState<TemplateBackground['mode']>('solid');
+  const [solidColor, setSolidColor] = useState('#4A90E2');
+  const [gradientFrom, setGradientFrom] = useState('#4A90E2');
+  const [gradientTo, setGradientTo] = useState('#7B68EE');
   const [frameModesByDevice, setFrameModesByDevice] = useState<FrameModesByDevice>({});
   const [frameAssetFilesByDevice, setFrameAssetFilesByDevice] = useState<
     Partial<Record<DeviceType, string[]>>
@@ -148,6 +179,7 @@ export default function GeneratePage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const previewRequestIdRef = useRef(0);
 
   const availableDevices = useMemo(() => {
     if (!app) return [];
@@ -155,6 +187,30 @@ export default function GeneratePage() {
   }, [app]);
 
   const availableLocales = useMemo(() => collectSavedLocales(copies), [copies]);
+  const templateBackground = useMemo<TemplateBackground>(() => {
+    if (backgroundMode === 'solid') {
+      return {
+        mode: 'solid',
+        color: solidColor,
+      };
+    }
+
+    return {
+      mode: 'gradient',
+      from: gradientFrom,
+      to: gradientTo,
+      angle: 135,
+    };
+  }, [backgroundMode, solidColor, gradientFrom, gradientTo]);
+
+  const backgroundPreviewStyle = useMemo(() => {
+    if (backgroundMode === 'solid') {
+      return { backgroundColor: solidColor };
+    }
+    return {
+      backgroundImage: `linear-gradient(135deg, ${gradientFrom} 0%, ${gradientTo} 100%)`,
+    };
+  }, [backgroundMode, solidColor, gradientFrom, gradientTo]);
 
   useEffect(() => {
     loadData();
@@ -252,6 +308,8 @@ export default function GeneratePage() {
     const generatePreview = async () => {
       if (!app || selectedDevices.length === 0) {
         setPreviewImage(null);
+        setPreviewError(null);
+        setPreviewLoading(false);
         return;
       }
 
@@ -260,6 +318,8 @@ export default function GeneratePage() {
 
       if (!previewScreen) {
         setPreviewImage(null);
+        setPreviewError(null);
+        setPreviewLoading(false);
         return;
       }
 
@@ -270,9 +330,11 @@ export default function GeneratePage() {
       if (!defaultCopy) {
         setPreviewError('Add at least one copy before generating preview.');
         setPreviewImage(null);
+        setPreviewLoading(false);
         return;
       }
 
+      const requestId = ++previewRequestIdRef.current;
       setPreviewLoading(true);
       setPreviewError(null);
 
@@ -295,7 +357,8 @@ export default function GeneratePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             screenshot_base64: screenshotBase64,
-            style: templateStyle,
+            style: BACKGROUND_TEMPLATE_STYLE,
+            template_background: templateBackground,
             device_type: previewDevice,
             title: defaultCopy.title,
             subtitle: defaultCopy.subtitle || '',
@@ -309,16 +372,23 @@ export default function GeneratePage() {
         }
 
         const payload = await previewResponse.json();
+        if (previewRequestIdRef.current !== requestId) {
+          return;
+        }
         setPreviewImage(`data:image/png;base64,${payload.data.image_base64}`);
       } catch (previewGenerationError) {
-        setPreviewImage(null);
+        if (previewRequestIdRef.current !== requestId) {
+          return;
+        }
         setPreviewError(
           previewGenerationError instanceof Error
             ? previewGenerationError.message
             : 'Failed to generate preview'
         );
       } finally {
-        setPreviewLoading(false);
+        if (previewRequestIdRef.current === requestId) {
+          setPreviewLoading(false);
+        }
       }
     };
 
@@ -327,7 +397,7 @@ export default function GeneratePage() {
     app,
     copies,
     selectedDevices,
-    templateStyle,
+    templateBackground,
     frameModesByDevice,
     selectedFrameAssetFilesByDevice,
   ]);
@@ -385,6 +455,32 @@ export default function GeneratePage() {
     setSelectedFrameAssetFilesByDevice((prev) => ({ ...prev, [deviceType]: frameAssetFile }));
   };
 
+  const selectSolidColor = (value: string) => {
+    const normalized = normalizeHexColor(value);
+    if (normalized) {
+      setBackgroundMode('solid');
+      setSolidColor(normalized);
+    }
+  };
+
+  const setGradientStop = (key: 'from' | 'to', value: string) => {
+    const normalized = normalizeHexColor(value);
+    if (!normalized) {
+      return;
+    }
+    if (key === 'from') {
+      setGradientFrom(normalized);
+      return;
+    }
+    setGradientTo(normalized);
+  };
+
+  const selectGradientPreset = (from: string, to: string) => {
+    setBackgroundMode('gradient');
+    setGradientFrom(from.toUpperCase());
+    setGradientTo(to.toUpperCase());
+  };
+
   const startGeneration = async () => {
     setGenerating(true);
     setError(null);
@@ -406,7 +502,8 @@ export default function GeneratePage() {
         body: JSON.stringify({
           devices: selectedDevices,
           locales: selectedLocales,
-          template_style: templateStyle,
+          template_style: BACKGROUND_TEMPLATE_STYLE,
+          template_background: templateBackground,
           frame_mode: 'minimal',
           frame_modes: selectedDeviceFrameModes,
           frame_asset_files:
@@ -601,22 +698,123 @@ export default function GeneratePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>4. Choose Template Style</CardTitle>
+            <CardTitle>4. Choose Template Background</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {TEMPLATE_STYLES.map((style) => (
-                <Button
-                  key={style}
-                  variant={templateStyle === style ? 'default' : 'outline'}
-                  className="h-auto flex-col items-start p-4"
-                  onClick={() => setTemplateStyle(style)}
-                >
-                  <div className="font-semibold mb-1">{TEMPLATE_STYLE_INFO[style].name}</div>
-                  <div className="text-xs text-left">{TEMPLATE_STYLE_INFO[style].description}</div>
-                </Button>
-              ))}
+          <CardContent className="space-y-5">
+            <div className="grid max-w-sm grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={backgroundMode === 'solid' ? 'default' : 'outline'}
+                onClick={() => setBackgroundMode('solid')}
+              >
+                Single Color
+              </Button>
+              <Button
+                type="button"
+                variant={backgroundMode === 'gradient' ? 'default' : 'outline'}
+                onClick={() => setBackgroundMode('gradient')}
+              >
+                Gradient
+              </Button>
             </div>
+
+            {backgroundMode === 'gradient' && (
+              <div className="rounded-xl border p-3">
+                <div className="h-28 rounded-lg border" style={backgroundPreviewStyle} />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Live background preview applied to template output
+                </p>
+              </div>
+            )}
+
+            {backgroundMode === 'solid' ? (
+              <div className="space-y-3">
+                <Label htmlFor="template-solid-color">Pick color</Label>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="template-solid-color"
+                    type="color"
+                    value={solidColor}
+                    onChange={(event) => selectSolidColor(event.target.value)}
+                    className="h-10 w-12 cursor-pointer rounded border border-input bg-background p-1"
+                  />
+                  <Input value={solidColor} readOnly className="max-w-[180px] font-mono" />
+                </div>
+                <div className="grid grid-cols-6 gap-2 sm:grid-cols-9">
+                  {SOLID_COLOR_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => selectSolidColor(preset)}
+                      className={`h-8 w-8 rounded border ${
+                        solidColor === preset.toUpperCase()
+                          ? 'border-primary ring-2 ring-primary/30'
+                          : 'border-input'
+                      }`}
+                      style={{ backgroundColor: preset }}
+                      aria-label={`Use color ${preset}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="template-gradient-from">From</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="template-gradient-from"
+                        type="color"
+                        value={gradientFrom}
+                        onChange={(event) => setGradientStop('from', event.target.value)}
+                        className="h-10 w-12 cursor-pointer rounded border border-input bg-background p-1"
+                      />
+                      <Input value={gradientFrom} readOnly className="font-mono" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="template-gradient-to">To</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="template-gradient-to"
+                        type="color"
+                        value={gradientTo}
+                        onChange={(event) => setGradientStop('to', event.target.value)}
+                        className="h-10 w-12 cursor-pointer rounded border border-input bg-background p-1"
+                      />
+                      <Input value={gradientTo} readOnly className="font-mono" />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {GRADIENT_PRESETS.map((preset) => {
+                    const isSelected =
+                      gradientFrom === preset.from.toUpperCase() &&
+                      gradientTo === preset.to.toUpperCase();
+
+                    return (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => selectGradientPreset(preset.from, preset.to)}
+                        className={`overflow-hidden rounded-lg border text-left transition-colors ${
+                          isSelected ? 'border-primary bg-primary/5' : 'border-input hover:bg-accent'
+                        }`}
+                      >
+                        <div
+                          className="h-10"
+                          style={{
+                            backgroundImage: `linear-gradient(135deg, ${preset.from} 0%, ${preset.to} 100%)`,
+                          }}
+                        />
+                        <p className="px-2 py-1 text-xs">{preset.label}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -625,10 +823,7 @@ export default function GeneratePage() {
             <CardTitle>5. Preview (Default English Copy)</CardTitle>
           </CardHeader>
           <CardContent>
-            {previewLoading && (
-              <p className="text-sm text-muted-foreground">Rendering preview...</p>
-            )}
-            {!previewLoading && previewImage && (
+            {previewImage && (
               <div className="relative aspect-[9/16] max-w-xs mx-auto rounded-md border bg-muted">
                 <Image
                   src={previewImage}
@@ -637,9 +832,17 @@ export default function GeneratePage() {
                   className="object-contain"
                   unoptimized
                 />
+                {previewLoading && (
+                  <div className="absolute inset-x-2 top-2 rounded bg-background/85 px-2 py-1 text-center text-xs text-muted-foreground backdrop-blur-sm">
+                    Updating preview...
+                  </div>
+                )}
               </div>
             )}
-            {!previewLoading && previewError && (
+            {!previewImage && previewLoading && (
+              <p className="text-sm text-muted-foreground">Rendering preview...</p>
+            )}
+            {previewError && (
               <p className="text-sm text-destructive">{previewError}</p>
             )}
           </CardContent>

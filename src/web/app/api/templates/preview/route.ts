@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     const previewBuffer = await templateService.generatePreview(
       screenshotBuffer,
       validated.style,
+      validated.template_background,
       templateDeviceType,
       validated.title,
       validated.subtitle || '',
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
     return successResponse({
       image_base64: previewBase64,
       style: validated.style,
+      template_background: validated.template_background,
       frame_mode: validated.frame_mode,
       frame_asset_file: validated.frame_asset_file,
     });

@@ -14,6 +14,21 @@ export const deviceTypeSchema = z.enum(['iPhone', 'iPad', 'Android-phone', 'Andr
  * Template style schema
  */
 export const templateStyleSchema = z.enum(['minimal', 'modern', 'gradient', 'dark', 'playful']);
+export const hexColorSchema = z
+  .string()
+  .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Color must be a valid hex value');
+export const templateBackgroundSchema = z.discriminatedUnion('mode', [
+  z.object({
+    mode: z.literal('solid'),
+    color: hexColorSchema,
+  }),
+  z.object({
+    mode: z.literal('gradient'),
+    from: hexColorSchema,
+    to: hexColorSchema,
+    angle: z.number().min(0).max(360).optional(),
+  }),
+]);
 
 /**
  * Frame mode schema
@@ -134,6 +149,7 @@ export const startGenerationSchema = z.object({
       message: 'Locales must be unique',
     }),
   template_style: templateStyleSchema,
+  template_background: templateBackgroundSchema.optional(),
   frame_mode: frameModeSchema,
   frame_modes: frameModesByDeviceSchema.optional(),
   frame_asset_files: frameAssetFilesByDeviceSchema.optional(),
@@ -145,6 +161,7 @@ export const startGenerationSchema = z.object({
 export const templatePreviewSchema = z.object({
   screenshot_base64: z.string().min(1, 'Screenshot is required'),
   style: templateStyleSchema,
+  template_background: templateBackgroundSchema.optional(),
   device_type: deviceTypeSchema,
   title: z.string().min(1).max(30),
   subtitle: z.string().max(80).optional(),

@@ -3,7 +3,12 @@
  */
 
 import { TemplateEngine } from '../../templates/engine';
-import type { TemplateStyle, TemplateDeviceType, TemplateFrameMode } from '../../types';
+import type {
+  TemplateStyle,
+  TemplateDeviceType,
+  TemplateFrameMode,
+  TemplateBackground,
+} from '../../types';
 
 /**
  * Template service for generating marketing screenshots
@@ -29,6 +34,7 @@ export class TemplateService {
   async generateScreenshot(
     screenshotBuffer: Buffer,
     style: TemplateStyle,
+    background: TemplateBackground | undefined,
     deviceType: TemplateDeviceType,
     title: string,
     subtitle: string,
@@ -39,6 +45,7 @@ export class TemplateService {
     return this.engine.composite({
       screenshot: screenshotBuffer,
       style,
+      background,
       deviceType,
       title,
       subtitle,
@@ -70,6 +77,7 @@ export class TemplateService {
   async generatePreview(
     screenshotBuffer: Buffer,
     style: TemplateStyle,
+    background: TemplateBackground | undefined,
     deviceType: TemplateDeviceType,
     title: string,
     subtitle: string,
@@ -79,6 +87,7 @@ export class TemplateService {
     return this.engine.composite({
       screenshot: screenshotBuffer,
       style,
+      background,
       deviceType,
       title,
       subtitle: subtitle || undefined,

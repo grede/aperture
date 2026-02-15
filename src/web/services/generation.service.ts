@@ -37,8 +37,15 @@ export class GenerationService {
       updateGenerationStatus(generationId, 'processing', 0);
 
       const { app_id, config } = generation;
-      const { devices, locales, template_style, frame_mode, frame_modes, frame_asset_files } =
-        config;
+      const {
+        devices,
+        locales,
+        template_style,
+        template_background,
+        frame_mode,
+        frame_modes,
+        frame_asset_files,
+      } = config;
 
       // Fetch app for validation
       const app = getAppById(app_id);
@@ -93,6 +100,7 @@ export class GenerationService {
             const outputBuffer = await this.templateService.generateScreenshot(
               screenshotBuffer,
               template_style,
+              template_background,
               templateDeviceType,
               copy.title,
               copy.subtitle || '',

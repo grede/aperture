@@ -38,6 +38,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       devices: validated.devices,
       locales: validated.locales,
       template_style: validated.template_style,
+      template_background: validated.template_background,
       frame_mode: validated.frame_mode,
       frame_modes: validated.frame_modes,
       frame_asset_files: validated.frame_asset_files,

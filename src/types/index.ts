@@ -85,10 +85,14 @@ export interface LocaleData {
 export type TemplateStyle = 'minimal' | 'modern' | 'gradient' | 'dark' | 'playful';
 export type TemplateFrameMode = 'none' | 'minimal' | 'realistic';
 export type TemplateDeviceType = 'iPhone' | 'iPad' | 'Android';
+export type TemplateBackground =
+  | { mode: 'solid'; color: string }
+  | { mode: 'gradient'; from: string; to: string; angle?: number };
 
 export interface CompositeOptions {
   screenshot: Buffer;
   style: TemplateStyle;
+  background?: TemplateBackground;
   deviceType: TemplateDeviceType;
   title: string;
   subtitle?: string;

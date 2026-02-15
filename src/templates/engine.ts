@@ -1,5 +1,10 @@
 import sharp from 'sharp';
-import type { CompositeOptions, TemplateDeviceType, TemplateStyle } from '../types/index.js';
+import type {
+  CompositeOptions,
+  TemplateBackground,
+  TemplateDeviceType,
+  TemplateStyle,
+} from '../types/index.js';
 import { minimalStyle, type StyleConfig } from './styles/minimal.js';
 import { modernStyle } from './styles/modern.js';
 import { gradientStyle } from './styles/gradient.js';
@@ -122,10 +127,13 @@ export class TemplateEngine {
    * Composite a screenshot into a store-ready marketing image
    */
   async composite(options: CompositeOptions): Promise<Buffer> {
-    const style = this.styles.get(options.style);
-    if (!style) {
+    const baseStyle = this.styles.get(options.style);
+    if (!baseStyle) {
       throw new Error(`Unknown style: ${options.style}`);
     }
+    const style = options.background
+      ? this.withAutoTextColor(baseStyle, options.background)
+      : baseStyle;
 
     const dimensions = EXPORT_DIMENSIONS[options.deviceType];
     if (!dimensions) {
@@ -141,8 +149,14 @@ export class TemplateEngine {
     // Create background
     let background: sharp.Sharp;
 
-    if (options.style === 'modern' || options.style === 'gradient') {
-      // Create gradient background
+    if (options.background) {
+      background = await this.createBackgroundFromSelection(
+        dimensions.width,
+        dimensions.height,
+        options.background
+      );
+    } else if (options.style === 'modern' || options.style === 'gradient') {
+      // Create default gradient background
       background = await this.createGradientBackground(
         dimensions.width,
         dimensions.height,
@@ -530,6 +544,32 @@ export class TemplateEngine {
   }
 
   /**
+   * Create background from user-selected values
+   */
+  private async createBackgroundFromSelection(
+    width: number,
+    height: number,
+    background: TemplateBackground
+  ): Promise<sharp.Sharp> {
+    if (background.mode === 'solid') {
+      return sharp({
+        create: {
+          width,
+          height,
+          channels: 3,
+          background: background.color,
+        },
+      });
+    }
+
+    return sharp(
+      Buffer.from(
+        this.createCustomGradient(width, height, background.from, background.to, background.angle)
+      )
+    );
+  }
+
+  /**
    * Create a gradient background
    */
   private async createGradientBackground(
@@ -544,6 +584,78 @@ export class TemplateEngine {
         : this.createBoldGradient(width, height);
 
     return sharp(Buffer.from(gradientSVG));
+  }
+
+  private createCustomGradient(
+    width: number,
+    height: number,
+    fromColor: string,
+    toColor: string,
+    angle = 135
+  ): string {
+    const normalizedAngle = ((angle % 360) + 360) % 360;
+    const radians = (normalizedAngle * Math.PI) / 180;
+    const dx = Math.cos(radians) * 50;
+    const dy = Math.sin(radians) * 50;
+    const x1 = 50 - dx;
+    const y1 = 50 + dy;
+    const x2 = 50 + dx;
+    const y2 = 50 - dy;
+
+    return `
+      <svg width="${width}" height="${height}">
+        <defs>
+          <linearGradient id="userGrad" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">
+            <stop offset="0%" style="stop-color:${fromColor};stop-opacity:1" />
+            <stop offset="100%" style="stop-color:${toColor};stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <rect width="${width}" height="${height}" fill="url(#userGrad)" />
+      </svg>
+    `;
+  }
+
+  private withAutoTextColor(style: StyleConfig, background: TemplateBackground): StyleConfig {
+    const textColor = this.getContrastingTextColor(background);
+    return { ...style, textColor };
+  }
+
+  private getContrastingTextColor(background: TemplateBackground): string {
+    if (background.mode === 'solid') {
+      const rgb = this.parseHexColor(background.color);
+      return this.isLightColor(rgb) ? '#111111' : '#FFFFFF';
+    }
+
+    const start = this.parseHexColor(background.from);
+    const end = this.parseHexColor(background.to);
+    const average = {
+      r: Math.round((start.r + end.r) / 2),
+      g: Math.round((start.g + end.g) / 2),
+      b: Math.round((start.b + end.b) / 2),
+    };
+    return this.isLightColor(average) ? '#111111' : '#FFFFFF';
+  }
+
+  private parseHexColor(value: string): { r: number; g: number; b: number } {
+    const hex = value.replace('#', '').trim();
+    if (hex.length === 3) {
+      return {
+        r: parseInt(hex[0] + hex[0], 16),
+        g: parseInt(hex[1] + hex[1], 16),
+        b: parseInt(hex[2] + hex[2], 16),
+      };
+    }
+
+    return {
+      r: parseInt(hex.slice(0, 2), 16),
+      g: parseInt(hex.slice(2, 4), 16),
+      b: parseInt(hex.slice(4, 6), 16),
+    };
+  }
+
+  private isLightColor(color: { r: number; g: number; b: number }): boolean {
+    const relativeLuminance = (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255;
+    return relativeLuminance > 0.62;
   }
 
   /**

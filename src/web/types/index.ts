@@ -16,6 +16,9 @@ export type GenerationStatus = 'pending' | 'processing' | 'completed' | 'failed'
  * Template styles available
  */
 export type TemplateStyle = 'minimal' | 'modern' | 'gradient' | 'dark' | 'playful';
+export type TemplateBackground =
+  | { mode: 'solid'; color: string }
+  | { mode: 'gradient'; from: string; to: string; angle?: number };
 
 /**
  * Frame modes for device rendering
@@ -71,6 +74,7 @@ export interface GenerationConfig {
   devices: DeviceType[];
   locales: string[];
   template_style: TemplateStyle;
+  template_background?: TemplateBackground;
   frame_mode: FrameMode;
   frame_modes?: FrameModesByDevice;
   frame_asset_files?: FrameAssetFilesByDevice;
@@ -169,6 +173,7 @@ export interface StartGenerationRequest {
   devices: DeviceType[];
   locales: string[];
   template_style: TemplateStyle;
+  template_background?: TemplateBackground;
   frame_mode: FrameMode;
   frame_modes?: FrameModesByDevice;
   frame_asset_files?: FrameAssetFilesByDevice;
