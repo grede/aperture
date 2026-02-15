@@ -63,6 +63,74 @@ aperture init
 aperture run
 ```
 
+## Web Service Setup (Frontend + Backend)
+
+### 1. Install dependencies
+
+```bash
+git clone <your-repo-url>
+cd aperture
+npm install
+```
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env.local
+```
+
+Required:
+
+```bash
+OPENAI_API_KEY=sk-...
+```
+
+### 3. Run frontend + backend (single process)
+
+The web app uses Next.js App Router.  
+Frontend pages and backend API routes run together in one process:
+
+```bash
+npm run dev:web
+```
+
+Open: `http://localhost:3001`
+
+### 4. Run in production mode
+
+```bash
+npm run build:web
+npm run start:web
+```
+
+### 5. Optional: run standalone backend server
+
+If you want the separate Express/BullMQ backend (`src/server`) instead of Next.js API routes:
+
+1. Start Redis (example with Docker):
+
+```bash
+docker run --name aperture-redis -p 6379:6379 redis:7
+```
+
+2. Run backend in development:
+
+```bash
+npm run dev:server
+```
+
+Or production:
+
+```bash
+npm run build
+npm run server
+```
+
+Standalone backend defaults:
+- Health: `http://localhost:3000/health`
+- API base: `http://localhost:3000/api`
+- API auth header: `x-api-key` (defaults to `aperture-dev-key` unless `API_KEY` is set)
+
 ## Requirements
 
 - macOS with Xcode + iOS Simulator

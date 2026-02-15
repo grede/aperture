@@ -23,6 +23,11 @@ export type TemplateStyle = 'minimal' | 'modern' | 'gradient' | 'dark' | 'playfu
 export type FrameMode = 'none' | 'minimal' | 'realistic';
 
 /**
+ * Optional frame mode overrides per device type
+ */
+export type FrameModesByDevice = Partial<Record<DeviceType, FrameMode>>;
+
+/**
  * App entity
  */
 export interface App {
@@ -66,6 +71,7 @@ export interface GenerationConfig {
   locales: string[];
   template_style: TemplateStyle;
   frame_mode: FrameMode;
+  frame_modes?: FrameModesByDevice;
 }
 
 /**
@@ -162,6 +168,7 @@ export interface StartGenerationRequest {
   locales: string[];
   template_style: TemplateStyle;
   frame_mode: FrameMode;
+  frame_modes?: FrameModesByDevice;
 }
 
 /**

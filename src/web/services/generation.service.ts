@@ -39,7 +39,7 @@ export class GenerationService {
       updateGenerationStatus(generationId, 'processing', 0);
 
       const { app_id, config } = generation;
-      const { devices, locales, template_style, frame_mode } = config;
+      const { devices, locales, template_style, frame_mode, frame_modes } = config;
 
       // Fetch app for validation
       const app = getAppById(app_id);
@@ -88,6 +88,8 @@ export class GenerationService {
 
             // Map device type to template device type
             const templateDeviceType = DEVICE_TYPE_TO_TEMPLATE[screen.device_type];
+            const resolvedFrameMode =
+              frame_modes?.[screen.device_type] ?? frame_mode ?? 'minimal';
 
             // Generate composited image
             const outputBuffer = await this.templateService.generateScreenshot(
@@ -97,7 +99,7 @@ export class GenerationService {
               copy.title,
               copy.subtitle || '',
               locale,
-              frame_mode
+              resolvedFrameMode
             );
 
             // Save generated image

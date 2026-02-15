@@ -16,16 +16,18 @@ export default function HomePage() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-4xl font-bold">Aperture Screenshot Manager</h1>
-          <p className="text-muted-foreground mt-2">
-            Create and manage your app store screenshots with AI-powered localization
-          </p>
+      <div className="mb-8 rounded-2xl border bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight">Aperture Screenshot Manager</h1>
+            <p className="text-muted-foreground mt-2">
+              Create, localize, and generate app store screenshots from one workspace.
+            </p>
+          </div>
+          <Link href="/apps/new">
+            <Button size="lg">Create New App</Button>
+          </Link>
         </div>
-        <Link href="/apps/new">
-          <Button size="lg">Create New App</Button>
-        </Link>
       </div>
 
       <AppsList apps={appsWithScreens} />

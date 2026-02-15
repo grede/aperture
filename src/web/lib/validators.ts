@@ -19,6 +19,14 @@ export const templateStyleSchema = z.enum(['minimal', 'modern', 'gradient', 'dar
  * Frame mode schema
  */
 export const frameModeSchema = z.enum(['none', 'minimal', 'realistic']);
+export const frameModesByDeviceSchema = z
+  .object({
+    iPhone: frameModeSchema.optional(),
+    iPad: frameModeSchema.optional(),
+    'Android-phone': frameModeSchema.optional(),
+    'Android-tablet': frameModeSchema.optional(),
+  })
+  .strict();
 
 /**
  * Locale code schema (validates against supported locales)
@@ -118,6 +126,7 @@ export const startGenerationSchema = z.object({
     }),
   template_style: templateStyleSchema,
   frame_mode: frameModeSchema,
+  frame_modes: frameModesByDeviceSchema.optional(),
 });
 
 /**

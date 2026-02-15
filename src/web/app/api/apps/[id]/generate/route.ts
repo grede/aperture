@@ -42,6 +42,7 @@ export async function POST(
       locales: validated.locales,
       template_style: validated.template_style,
       frame_mode: validated.frame_mode,
+      frame_modes: validated.frame_modes,
     });
 
     // Start generation asynchronously
