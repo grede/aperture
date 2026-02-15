@@ -1,21 +1,16 @@
-import { readFile } from 'fs/promises';
-import { join } from 'path';
 import sharp from 'sharp';
-import type {
-  CompositeOptions,
-  TemplateDeviceType,
-  TemplateStyle,
-} from '../types/index.js';
+import type { CompositeOptions, TemplateDeviceType, TemplateStyle } from '../types/index.js';
 import { minimalStyle, type StyleConfig } from './styles/minimal.js';
 import { modernStyle } from './styles/modern.js';
 import { gradientStyle } from './styles/gradient.js';
 import { darkStyle } from './styles/dark.js';
 import { playfulStyle } from './styles/playful.js';
+import { resolveRealisticFrameAsset } from './realistic-frame-assets.js';
 
 const EXPORT_DIMENSIONS: Record<TemplateDeviceType, { width: number; height: number }> = {
-  'iPhone': { width: 1242, height: 2688 }, // iPhone 6.5" (iPhone 15 Pro Max)
-  'iPad': { width: 2048, height: 2732 },   // iPad 13" (iPad Pro)
-  'Android': { width: 1080, height: 1920 }, // Google Play portrait baseline
+  iPhone: { width: 1242, height: 2688 }, // iPhone 6.5" (iPhone 15 Pro Max)
+  iPad: { width: 2048, height: 2732 }, // iPad 13" (iPad Pro)
+  Android: { width: 1080, height: 1920 }, // Google Play portrait baseline
 };
 
 interface VisualRegion {
@@ -66,7 +61,7 @@ interface LayerResult {
 }
 
 const MINIMAL_FRAME_PRESETS: Record<TemplateDeviceType, MinimalFramePreset> = {
-  'iPhone': {
+  iPhone: {
     outerAspect: 430 / 932,
     screenXRatio: 0.043,
     screenYRatio: 0.03,
@@ -80,7 +75,7 @@ const MINIMAL_FRAME_PRESETS: Record<TemplateDeviceType, MinimalFramePreset> = {
     innerBorderColor: '#0D1118',
     topAccent: 'speaker',
   },
-  'iPad': {
+  iPad: {
     outerAspect: 3 / 4,
     screenXRatio: 0.04,
     screenYRatio: 0.04,
@@ -94,7 +89,7 @@ const MINIMAL_FRAME_PRESETS: Record<TemplateDeviceType, MinimalFramePreset> = {
     innerBorderColor: '#0D1118',
     topAccent: 'none',
   },
-  'Android': {
+  Android: {
     outerAspect: 9 / 19.5,
     screenXRatio: 0.05,
     screenYRatio: 0.05,
@@ -168,9 +163,10 @@ export class TemplateEngine {
     const visualRegion = this.getVisualRegion(dimensions.width, dimensions.height, style);
     const frameMode = options.frameMode ?? 'minimal';
 
-    const layerResult = frameMode === 'none'
-      ? await this.createNoFrameLayers(options, screenshotMeta, visualRegion)
-      : await this.createFramedLayers(options, visualRegion);
+    const layerResult =
+      frameMode === 'none'
+        ? await this.createNoFrameLayers(options, screenshotMeta, visualRegion)
+        : await this.createFramedLayers(options, screenshotMeta, visualRegion);
 
     const textSVG = this.createTextSVG(
       options.title,
@@ -190,7 +186,11 @@ export class TemplateEngine {
     return canvas.png().toBuffer();
   }
 
-  private getVisualRegion(canvasWidth: number, canvasHeight: number, style: StyleConfig): VisualRegion {
+  private getVisualRegion(
+    canvasWidth: number,
+    canvasHeight: number,
+    style: StyleConfig
+  ): VisualRegion {
     const textReserve = style.textPosition === 'top' || style.textPosition === 'bottom' ? 240 : 0;
     const left = style.deviceFramePadding;
     const width = canvasWidth - style.deviceFramePadding * 2;
@@ -243,12 +243,17 @@ export class TemplateEngine {
 
   private async createFramedLayers(
     options: CompositeOptions,
+    screenshotMeta: sharp.Metadata,
     visualRegion: VisualRegion
   ): Promise<LayerResult> {
     const frameMode = options.frameMode ?? 'minimal';
 
     if (frameMode === 'realistic') {
-      const realisticLayers = await this.createRealisticFrameLayers(options, visualRegion);
+      const realisticLayers = await this.createRealisticFrameLayers(
+        options,
+        screenshotMeta,
+        visualRegion
+      );
       if (realisticLayers) return realisticLayers;
     }
 
@@ -290,7 +295,9 @@ export class TemplateEngine {
           top: frameTop + screen.y,
         },
         {
-          input: Buffer.from(this.createMinimalFrameOverlaySVG(frame.width, frame.height, preset, screen)),
+          input: Buffer.from(
+            this.createMinimalFrameOverlaySVG(frame.width, frame.height, preset, screen)
+          ),
           left: frameLeft,
           top: frameTop,
         },
@@ -301,9 +308,18 @@ export class TemplateEngine {
 
   private async createRealisticFrameLayers(
     options: CompositeOptions,
+    screenshotMeta: sharp.Metadata,
     visualRegion: VisualRegion
   ): Promise<LayerResult | null> {
-    const frameAsset = await this.loadRealisticFrameAsset(options.deviceType, options.frameAssetsDir);
+    const targetScreenAspect =
+      screenshotMeta.width && screenshotMeta.height
+        ? screenshotMeta.width / screenshotMeta.height
+        : undefined;
+    const frameAsset = await this.loadRealisticFrameAsset(
+      options.deviceType,
+      options.frameAssetsDir,
+      targetScreenAspect
+    );
     if (!frameAsset) {
       return null;
     }
@@ -363,58 +379,14 @@ export class TemplateEngine {
 
   private async loadRealisticFrameAsset(
     deviceType: TemplateDeviceType,
-    assetsDir?: string
+    assetsDir?: string,
+    targetScreenAspect?: number
   ): Promise<RealisticFrameAsset | null> {
-    if (!assetsDir) return null;
-
-    const deviceKey = deviceType.toLowerCase();
-    const framePath = join(assetsDir, `${deviceKey}.png`);
-    const metadataPath = join(assetsDir, `${deviceKey}.json`);
-
-    try {
-      const [overlay, metadataJSON] = await Promise.all([
-        readFile(framePath),
-        readFile(metadataPath, 'utf-8'),
-      ]);
-      const overlayMeta = await sharp(overlay).metadata();
-      if (!overlayMeta.width || !overlayMeta.height) {
-        return null;
-      }
-
-      const parsed = JSON.parse(metadataJSON) as { screen?: Partial<ScreenRect> };
-      const screen = this.parseScreenRect(parsed.screen);
-      if (!screen) {
-        return null;
-      }
-
-      return {
-        overlay,
-        overlayWidth: overlayMeta.width,
-        overlayHeight: overlayMeta.height,
-        screen,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  private parseScreenRect(screen?: Partial<ScreenRect>): ScreenRect | null {
-    if (!screen) return null;
-
-    const x = Number(screen.x);
-    const y = Number(screen.y);
-    const width = Number(screen.width);
-    const height = Number(screen.height);
-    const cornerRadius = Number(screen.cornerRadius ?? 0);
-
-    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
-      return null;
-    }
-    if (width <= 0 || height <= 0 || x < 0 || y < 0) {
-      return null;
-    }
-
-    return { x, y, width, height, cornerRadius: Math.max(0, cornerRadius) };
+    return resolveRealisticFrameAsset({
+      deviceType,
+      assetsDir,
+      targetScreenAspect,
+    });
   }
 
   private resolveMinimalScreenRect(
@@ -484,7 +456,9 @@ export class TemplateEngine {
     frameHeight: number,
     preset: MinimalFramePreset
   ): string {
-    const cornerRadius = Math.round(Math.min(frameWidth, frameHeight) * preset.outerCornerRadiusRatio);
+    const cornerRadius = Math.round(
+      Math.min(frameWidth, frameHeight) * preset.outerCornerRadiusRatio
+    );
 
     return `
       <svg width="${frameWidth}" height="${frameHeight}">
@@ -505,17 +479,21 @@ export class TemplateEngine {
     preset: MinimalFramePreset,
     screen: ScreenRect
   ): string {
-    const outerRadius = Math.round(Math.min(frameWidth, frameHeight) * preset.outerCornerRadiusRatio);
+    const outerRadius = Math.round(
+      Math.min(frameWidth, frameHeight) * preset.outerCornerRadiusRatio
+    );
     const outerStrokeWidth = Math.max(2, Math.round(frameWidth * 0.004));
     const screenStrokeWidth = Math.max(2, Math.round(frameWidth * 0.0025));
 
-    const speakerAccent = preset.topAccent === 'speaker'
-      ? `<rect x="${Math.round(frameWidth * 0.35)}" y="${Math.round(frameHeight * 0.012)}" width="${Math.round(frameWidth * 0.30)}" height="${Math.max(8, Math.round(frameHeight * 0.01))}" rx="${Math.round(frameWidth * 0.02)}" fill="#0A0D12" opacity="0.85" />`
-      : '';
+    const speakerAccent =
+      preset.topAccent === 'speaker'
+        ? `<rect x="${Math.round(frameWidth * 0.35)}" y="${Math.round(frameHeight * 0.012)}" width="${Math.round(frameWidth * 0.3)}" height="${Math.max(8, Math.round(frameHeight * 0.01))}" rx="${Math.round(frameWidth * 0.02)}" fill="#0A0D12" opacity="0.85" />`
+        : '';
 
-    const punchHole = preset.topAccent === 'punch-hole'
-      ? `<circle cx="${screen.x + Math.round(screen.width / 2)}" cy="${screen.y + Math.round(screen.height * 0.03)}" r="${Math.max(6, Math.round(frameWidth * 0.015))}" fill="#0B0B0D" opacity="0.9" />`
-      : '';
+    const punchHole =
+      preset.topAccent === 'punch-hole'
+        ? `<circle cx="${screen.x + Math.round(screen.width / 2)}" cy="${screen.y + Math.round(screen.height * 0.03)}" r="${Math.max(6, Math.round(frameWidth * 0.015))}" fill="#0B0B0D" opacity="0.9" />`
+        : '';
 
     return `
       <svg width="${frameWidth}" height="${frameHeight}">
@@ -557,9 +535,10 @@ export class TemplateEngine {
     style: TemplateStyle
   ): Promise<sharp.Sharp> {
     // Generate gradient SVG
-    const gradientSVG = style === 'modern'
-      ? this.createModernGradient(width, height)
-      : this.createBoldGradient(width, height);
+    const gradientSVG =
+      style === 'modern'
+        ? this.createModernGradient(width, height)
+        : this.createBoldGradient(width, height);
 
     return sharp(Buffer.from(gradientSVG));
   }
@@ -613,16 +592,16 @@ export class TemplateEngine {
     // Simple text wrapping for subtitle - increased for wider text
     const maxCharsPerLine = 50;
     const subtitleLines = this.wrapText(subtitle, maxCharsPerLine);
-    const subtitleBlockHeight = subtitleLines.length > 0
-      ? style.subtitleSize + (subtitleLines.length - 1) * (style.subtitleSize + 10)
-      : 0;
+    const subtitleBlockHeight =
+      subtitleLines.length > 0
+        ? style.subtitleSize + (subtitleLines.length - 1) * (style.subtitleSize + 10)
+        : 0;
 
     const topTitleY = style.textPadding + style.titleSize;
     const bottomTitleTarget = contentBottom + style.textPadding + style.titleSize;
     const bottomSafeLimit = canvasHeight - style.textPadding - subtitleBlockHeight - 14;
-    const titleY = style.textPosition === 'top'
-      ? topTitleY
-      : Math.min(bottomTitleTarget, bottomSafeLimit);
+    const titleY =
+      style.textPosition === 'top' ? topTitleY : Math.min(bottomTitleTarget, bottomSafeLimit);
     const subtitleY = titleY + style.titleSize + 14;
 
     return `
@@ -645,9 +624,12 @@ export class TemplateEngine {
           }
         </style>
         <text x="${canvasWidth / 2}" y="${titleY}" class="title">${this.escapeXML(title)}</text>
-        ${subtitleLines.map((line, i) =>
-          `<text x="${canvasWidth / 2}" y="${subtitleY + i * (style.subtitleSize + 10)}" class="subtitle">${this.escapeXML(line)}</text>`
-        ).join('')}
+        ${subtitleLines
+          .map(
+            (line, i) =>
+              `<text x="${canvasWidth / 2}" y="${subtitleY + i * (style.subtitleSize + 10)}" class="subtitle">${this.escapeXML(line)}</text>`
+          )
+          .join('')}
       </svg>
     `;
   }

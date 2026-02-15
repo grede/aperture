@@ -45,11 +45,10 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 
 function FrameModePreview({ deviceType, mode }: { deviceType: DeviceType; mode: FrameMode }) {
   const isTablet = deviceType === 'iPad' || deviceType === 'Android-tablet';
-  const width = isTablet ? 56 : 40;
-  const height = isTablet ? 76 : 82;
+  const width = isTablet ? 66 : 48;
+  const height = isTablet ? 86 : 94;
   const radius = isTablet ? 12 : 14;
-  const screenInset = mode === 'realistic' ? (isTablet ? 6 : 4) : 2;
-  const screenRadius = mode === 'none' ? 8 : mode === 'realistic' ? 9 : 10;
+  const screenRadius = mode === 'none' ? 8 : 10;
 
   if (mode === 'none') {
     return (
@@ -65,28 +64,36 @@ function FrameModePreview({ deviceType, mode }: { deviceType: DeviceType; mode: 
     );
   }
 
-  const frameClasses =
-    mode === 'realistic'
-      ? 'border-slate-300 bg-gradient-to-b from-slate-100 via-slate-200 to-slate-400 shadow-[0_5px_14px_rgba(15,23,42,0.25)]'
-      : 'border-foreground/40 bg-background';
+  if (mode === 'realistic') {
+    const framePreviewPath = `/api/frame-assets/preview?device_type=${encodeURIComponent(deviceType)}`;
+    return (
+      <div className="mb-2 flex h-24 items-center justify-center">
+        <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-lg border border-input bg-muted/40">
+          <img
+            src={framePreviewPath}
+            alt={`${deviceType} realistic frame preview`}
+            className="h-full w-full object-contain p-1"
+            loading="lazy"
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-2 flex h-24 items-center justify-center">
       <div
-        className={`relative flex items-center justify-center border ${frameClasses}`}
+        className="relative flex items-center justify-center border border-foreground/40 bg-background"
         style={{ width, height, borderRadius: radius }}
       >
-        {mode === 'realistic' && !isTablet && (
-          <div className="absolute top-1 h-1.5 w-8 rounded-full bg-slate-500/60" />
-        )}
-        {mode === 'realistic' && isTablet && (
-          <div className="absolute top-1.5 h-1.5 w-1.5 rounded-full bg-slate-500/70" />
-        )}
         <div
           className="relative overflow-hidden bg-gradient-to-br from-sky-300 via-blue-200 to-indigo-200"
           style={{
-            width: width - screenInset * 2,
-            height: height - screenInset * 2,
+            width: width - 4,
+            height: height - 4,
             borderRadius: screenRadius,
           }}
         >

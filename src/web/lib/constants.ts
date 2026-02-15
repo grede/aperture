@@ -8,12 +8,7 @@ import type { TemplateDeviceType } from '../../types';
 /**
  * Device types available in the system
  */
-export const DEVICE_TYPES: DeviceType[] = [
-  'iPhone',
-  'iPad',
-  'Android-phone',
-  'Android-tablet',
-];
+export const DEVICE_TYPES: DeviceType[] = ['iPhone', 'iPad', 'Android-phone', 'Android-tablet'];
 
 /**
  * Map web device types to template engine device types
@@ -49,10 +44,7 @@ export const TEMPLATE_STYLES: TemplateStyle[] = [
 /**
  * Template style descriptions
  */
-export const TEMPLATE_STYLE_INFO: Record<
-  TemplateStyle,
-  { name: string; description: string }
-> = {
+export const TEMPLATE_STYLE_INFO: Record<TemplateStyle, { name: string; description: string }> = {
   minimal: {
     name: 'Minimal',
     description: 'White background, thin frame, text below',
@@ -96,7 +88,7 @@ export const FRAME_MODES: Array<{
   {
     value: 'realistic',
     label: 'Realistic Frame',
-    description: 'Photorealistic device (requires custom assets)',
+    description: 'Photorealistic device frame',
   },
 ];
 
@@ -157,12 +149,7 @@ export const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
 /**
  * Allowed image MIME types
  */
-export const ALLOWED_IMAGE_TYPES = [
-  'image/png',
-  'image/jpeg',
-  'image/jpg',
-  'image/webp',
-];
+export const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 
 /**
  * App Store screenshot character limits
