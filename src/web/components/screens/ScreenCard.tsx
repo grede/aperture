@@ -20,7 +20,7 @@ export function ScreenCard({ screen, onDelete }: ScreenCardProps) {
       <div className="relative aspect-[9/16] bg-muted">
         <Image
           src={imagePath}
-          alt={`Screen ${screen.id}`}
+          alt={`Screenshot for ${DEVICE_TYPE_LABELS[screen.device_type]}`}
           fill
           className="object-contain"
           unoptimized

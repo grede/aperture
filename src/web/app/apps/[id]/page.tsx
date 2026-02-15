@@ -135,44 +135,69 @@ export default function AppDetailsPage() {
   };
 
   if (loading) {
-    return <div className="container mx-auto py-8 px-4">Loading...</div>;
+    return (
+      <div className="container mx-auto py-12 px-6">
+        <div className="space-y-4 max-w-3xl">
+          <div className="h-8 w-48 bg-gray-200 rounded-lg animate-pulse" />
+          <div className="h-4 w-96 bg-gray-200 rounded animate-pulse" />
+          <div className="h-64 bg-gray-200 rounded-xl animate-pulse" />
+        </div>
+      </div>
+    );
   }
 
   if (!app) {
     return (
-      <div className="container mx-auto py-8 px-4">
-        <p>App not found</p>
+      <div className="container mx-auto py-16 px-6 text-center">
+        <div className="text-6xl mb-4">😕</div>
+        <h2 className="text-2xl font-bold mb-2">App Not Found</h2>
+        <p className="text-muted-foreground mb-6">
+          The app you're looking for doesn't exist
+        </p>
+        <Link href="/">
+          <Button>Back to Apps</Button>
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="mb-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-bold">{app.name}</h1>
-            <p className="mt-2 text-muted-foreground">{app.description}</p>
-          </div>
-          <div className="flex gap-2">
-            <Link href={`/apps/${app.id}/copies`}>
-              <Button variant="outline">Manage Copies</Button>
-            </Link>
-            <Link href={`/apps/${app.id}/generate`}>
-              <Button>Generate Screenshots</Button>
-            </Link>
+    <div className="min-h-screen">
+      {/* Header */}
+      <div className="border-b bg-blue-50">
+        <div className="container mx-auto py-8 px-6">
+          <div className="flex flex-wrap items-start justify-between gap-6">
+            <div className="flex-1">
+              <h1 className="text-4xl font-bold mb-2">{app.name}</h1>
+              <p className="text-lg text-muted-foreground">{app.description}</p>
+            </div>
+            <div className="flex gap-2">
+              <Link href={`/apps/${app.id}/copies`}>
+                <Button variant="outline">
+                  Manage Copies
+                </Button>
+              </Link>
+              <Link href={`/apps/${app.id}/generate`}>
+                <Button>
+                  Generate Screenshots
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </div>
 
-      <Card className="mb-8">
+      <div className="container mx-auto py-8 px-6 space-y-6">
+
+      {/* Add Screen Card */}
+      <Card>
         <CardHeader>
           <CardTitle>Add Screen</CardTitle>
           <CardDescription>
             Upload raw screenshot and set default English copy for this screen.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6">
           <div className="space-y-2 md:col-span-2">
             <Label>Screenshot</Label>
             <Input
@@ -225,12 +250,22 @@ export default function AppDetailsPage() {
         </CardContent>
       </Card>
 
-      <Card className="mb-8">
+      {/* Screens Card */}
+      <Card>
         <CardHeader>
-          <CardTitle>Screens</CardTitle>
-          <CardDescription>
-            Manage uploaded screenshots across iPhone, iPad, Android phone, and tablet.
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Screens</CardTitle>
+              <CardDescription>
+                Manage uploaded screenshots across iPhone, iPad, Android phone, and tablet.
+              </CardDescription>
+            </div>
+            {app.screens.length > 0 && (
+              <Badge variant="secondary">
+                {app.screens.length} {app.screens.length === 1 ? 'screen' : 'screens'}
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {app.screens.length === 0 ? (
@@ -249,66 +284,72 @@ export default function AppDetailsPage() {
         </CardContent>
       </Card>
 
+      {/* Generation History Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Generation History</CardTitle>
-          <CardDescription>
-            Previous screenshot runs remain available for download and review.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {generations.length === 0 && (
-            <p className="text-sm text-muted-foreground">No generations yet.</p>
-          )}
-
-          {generations.map((generation) => (
-            <div
-              key={generation.id}
-              className="flex items-center justify-between rounded-md border p-3"
-            >
-              <div>
-                <p className="font-medium">Generation #{generation.id}</p>
-                <p className="text-sm text-muted-foreground">
-                  {formatDistance(new Date(generation.created_at), new Date(), {
-                    addSuffix: true,
-                  })}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Badge
-                  variant={
-                    generation.status === 'completed'
-                      ? 'default'
-                      : generation.status === 'failed'
-                      ? 'destructive'
-                      : 'secondary'
-                  }
-                >
-                  {generation.status}
-                </Badge>
-                <Link href={`/apps/${app.id}/generations/${generation.id}`}>
-                  <Button size="sm" variant="outline">
-                    Open
-                  </Button>
-                </Link>
-              </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Generation History</CardTitle>
+              <CardDescription>
+                Previous screenshot runs remain available for download and review.
+              </CardDescription>
             </div>
-          ))}
-
-          {completedGenerations.length > 0 && (
-            <p className="pt-1 text-xs text-muted-foreground">
-              {completedGenerations.length} completed generation
-              {completedGenerations.length > 1 ? 's' : ''} available.
-            </p>
+            {completedGenerations.length > 0 && (
+              <Badge variant="secondary">
+                {completedGenerations.length} completed
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-6">
+          {generations.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No generations yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {generations.map((generation) => (
+                <div
+                  key={generation.id}
+                  className="flex items-center justify-between rounded-md border p-3"
+                >
+                  <div>
+                    <p className="font-medium">Generation #{generation.id}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDistance(new Date(generation.created_at), new Date(), {
+                        addSuffix: true,
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge
+                      variant={
+                        generation.status === 'completed'
+                          ? 'default'
+                          : generation.status === 'failed'
+                          ? 'destructive'
+                          : 'secondary'
+                      }
+                    >
+                      {generation.status}
+                    </Badge>
+                    <Link href={`/apps/${app.id}/generations/${generation.id}`}>
+                      <Button size="sm" variant="outline">
+                        Open
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
 
       {error && (
-        <p className="mt-4 text-sm text-destructive" role="alert">
+        <p className="text-sm text-destructive" role="alert">
           {error}
         </p>
       )}
+      </div>
     </div>
   );
 }

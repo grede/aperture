@@ -139,7 +139,7 @@ export default function NewAppPage() {
   return (
     <div className="container mx-auto max-w-4xl py-8 px-4">
       <div className="mb-8">
-        <h1 className="text-4xl font-bold">Create App</h1>
+        <h1 className="text-4xl font-bold">Create New App</h1>
         <p className="mt-2 text-muted-foreground">
           Define app metadata, then upload raw screenshots and default English copy.
         </p>
@@ -189,7 +189,11 @@ export default function NewAppPage() {
                   Add at least one screenshot with its default English title/subtitle.
                 </CardDescription>
               </div>
-              <Button type="button" variant="outline" onClick={addScreen}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addScreen}
+              >
                 Add Screen
               </Button>
             </div>

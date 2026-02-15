@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -42,6 +43,61 @@ function bufferToBase64(buffer: ArrayBuffer): string {
   return window.btoa(binary);
 }
 
+function FrameModePreview({ deviceType, mode }: { deviceType: DeviceType; mode: FrameMode }) {
+  const isTablet = deviceType === 'iPad' || deviceType === 'Android-tablet';
+  const width = isTablet ? 56 : 40;
+  const height = isTablet ? 76 : 82;
+  const radius = isTablet ? 12 : 14;
+  const screenInset = mode === 'realistic' ? (isTablet ? 6 : 4) : 2;
+  const screenRadius = mode === 'none' ? 8 : mode === 'realistic' ? 9 : 10;
+
+  if (mode === 'none') {
+    return (
+      <div className="mb-2 flex h-24 items-center justify-center">
+        <div
+          className="relative overflow-hidden rounded-lg bg-gradient-to-br from-sky-200 via-blue-100 to-cyan-100 shadow-sm"
+          style={{ width: width - 4, height: height - 10 }}
+        >
+          <div className="absolute inset-x-2 top-3 h-1 rounded-full bg-white/70" />
+          <div className="absolute inset-x-3 bottom-3 h-2 rounded-full bg-white/65" />
+        </div>
+      </div>
+    );
+  }
+
+  const frameClasses =
+    mode === 'realistic'
+      ? 'border-slate-300 bg-gradient-to-b from-slate-100 via-slate-200 to-slate-400 shadow-[0_5px_14px_rgba(15,23,42,0.25)]'
+      : 'border-foreground/40 bg-background';
+
+  return (
+    <div className="mb-2 flex h-24 items-center justify-center">
+      <div
+        className={`relative flex items-center justify-center border ${frameClasses}`}
+        style={{ width, height, borderRadius: radius }}
+      >
+        {mode === 'realistic' && !isTablet && (
+          <div className="absolute top-1 h-1.5 w-8 rounded-full bg-slate-500/60" />
+        )}
+        {mode === 'realistic' && isTablet && (
+          <div className="absolute top-1.5 h-1.5 w-1.5 rounded-full bg-slate-500/70" />
+        )}
+        <div
+          className="relative overflow-hidden bg-gradient-to-br from-sky-300 via-blue-200 to-indigo-200"
+          style={{
+            width: width - screenInset * 2,
+            height: height - screenInset * 2,
+            borderRadius: screenRadius,
+          }}
+        >
+          <div className="absolute inset-x-2 top-2 h-1 rounded-full bg-white/65" />
+          <div className="absolute inset-x-2 bottom-2 h-1.5 rounded-full bg-white/55" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function GeneratePage() {
   const params = useParams();
   const router = useRouter();
@@ -62,9 +118,7 @@ export default function GeneratePage() {
 
   const availableDevices = useMemo(() => {
     if (!app) return [];
-    return Array.from(
-      new Set(app.screens.map((screen) => screen.device_type))
-    ) as DeviceType[];
+    return Array.from(new Set(app.screens.map((screen) => screen.device_type))) as DeviceType[];
   }, [app]);
 
   const availableLocales = useMemo(() => collectSavedLocales(copies), [copies]);
@@ -109,9 +163,7 @@ export default function GeneratePage() {
       }
 
       const previewDevice = selectedDevices[0];
-      const previewScreen = app.screens.find(
-        (screen) => screen.device_type === previewDevice
-      );
+      const previewScreen = app.screens.find((screen) => screen.device_type === previewDevice);
 
       if (!previewScreen) {
         setPreviewImage(null);
@@ -254,16 +306,40 @@ export default function GeneratePage() {
       router.push(`/apps/${appId}/generations/${data.data.generation_id}`);
     } catch (generationError) {
       setError(
-        generationError instanceof Error
-          ? generationError.message
-          : 'Failed to start generation'
+        generationError instanceof Error ? generationError.message : 'Failed to start generation'
       );
       setGenerating(false);
     }
   };
 
-  if (loading) return <div className="container mx-auto py-8">Loading...</div>;
-  if (!app) return <div className="container mx-auto py-8">App not found</div>;
+  if (loading) {
+    return (
+      <div className="container mx-auto py-12 px-6">
+        <div className="space-y-4 max-w-3xl">
+          <div className="h-8 w-64 bg-gray-200 rounded-lg animate-pulse" />
+          <div className="h-4 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-48 bg-gray-200 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!app) {
+    return (
+      <div className="container mx-auto py-16 px-6 text-center">
+        <div className="text-6xl mb-4">😕</div>
+        <h2 className="text-2xl font-bold mb-2">App Not Found</h2>
+        <p className="text-muted-foreground mb-6">The app you're looking for doesn't exist</p>
+        <Link href="/">
+          <Button>Back to Apps</Button>
+        </Link>
+      </div>
+    );
+  }
 
   const selectedScreensCount = app.screens.filter((screen) =>
     selectedDevices.includes(screen.device_type)
@@ -317,7 +393,7 @@ export default function GeneratePage() {
                           : 'border-input hover:bg-accent'
                       }`}
                     >
-                      <div className="mb-2 h-10 w-8 rounded-sm border border-foreground/40 bg-background mx-auto" />
+                      <FrameModePreview deviceType={deviceType} mode={mode.value} />
                       <p className="font-medium text-sm">{mode.label}</p>
                       <p className="text-xs text-muted-foreground">{mode.description}</p>
                     </button>
@@ -368,9 +444,7 @@ export default function GeneratePage() {
                   onClick={() => setTemplateStyle(style)}
                 >
                   <div className="font-semibold mb-1">{TEMPLATE_STYLE_INFO[style].name}</div>
-                  <div className="text-xs text-left">
-                    {TEMPLATE_STYLE_INFO[style].description}
-                  </div>
+                  <div className="text-xs text-left">{TEMPLATE_STYLE_INFO[style].description}</div>
                 </Button>
               ))}
             </div>
@@ -413,9 +487,7 @@ export default function GeneratePage() {
                 size="lg"
                 onClick={startGeneration}
                 disabled={
-                  generating ||
-                  selectedDevices.length === 0 ||
-                  selectedLocales.length === 0
+                  generating || selectedDevices.length === 0 || selectedLocales.length === 0
                 }
                 className="w-full max-w-md"
               >
