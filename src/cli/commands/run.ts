@@ -90,7 +90,9 @@ export async function runCommand(options: RunOptions): Promise<void> {
     }
 
     // Validate app installation configuration
-    const shouldInstall = config.installApp !== false; // Default to true if not specified
+    // Handle both boolean false and undefined (default to true)
+    const shouldInstall = config.installApp === undefined || config.installApp === true;
+
     if (shouldInstall && !config.app) {
       console.error(
         chalk.red('Error: app path is required when installApp is true (or not specified)')
@@ -256,7 +258,8 @@ export async function runCommand(options: RunOptions): Promise<void> {
         // This avoids conflicts between our WDA process and mobile-mcp's WDA management
 
         // Install and/or launch app based on configuration
-        const shouldInstall = config.installApp !== false; // Default to true
+        // Handle both boolean false and undefined (default to true)
+        const shouldInstall = config.installApp === undefined || config.installApp === true;
         let bundleId: string;
 
         if (shouldInstall) {

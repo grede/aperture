@@ -105,15 +105,6 @@ export class TemplateEngine {
       ? dimensions.height - screenshotHeight - style.deviceFramePadding - 100
       : style.deviceFramePadding + 100;
 
-    // Composite screenshot onto background
-    let canvas = background.composite([
-      {
-        input: resizedScreenshot,
-        top: screenshotY,
-        left: screenshotX,
-      },
-    ]);
-
     // Add text overlays
     const textSVG = this.createTextSVG(
       options.title,
@@ -124,7 +115,13 @@ export class TemplateEngine {
       screenshotY
     );
 
-    canvas = canvas.composite([
+    // Sharp does not merge sequential composite() calls; pass both overlays together.
+    const canvas = background.composite([
+      {
+        input: resizedScreenshot,
+        top: screenshotY,
+        left: screenshotX,
+      },
       {
         input: Buffer.from(textSVG),
         top: 0,
