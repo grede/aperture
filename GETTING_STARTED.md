@@ -425,6 +425,117 @@ npm run lint:fix  # auto-fix issues
 - Simulator pool manager
 - Multi-tenant support
 
+## Web GUI
+
+Aperture includes a modern web-based interface for managing apps and generating screenshots without using the CLI.
+
+### Starting the Web Interface
+
+```bash
+npm run dev:web
+```
+
+The web interface will be available at `http://localhost:3001`.
+
+### Web GUI Features
+
+#### 1. App Management
+- **Create Apps**: Define your app with a name and description
+- **Upload Screenshots**: Add screenshots for different device types (iPhone, iPad, Android phone/tablet)
+- **Add Marketing Copy**: Set titles and subtitles for each screen
+
+#### 2. Multi-Language Copy Management
+- **Manage Copies**: Edit marketing text for each screen in multiple languages
+- **AI Translation**: Automatically generate localized copies using AI
+- Supports 37+ App Store Connect locales
+
+#### 3. Screenshot Generation
+1. Select target devices (filtered by uploaded screenshots)
+2. Choose frame mode (none, minimal, realistic)
+3. Select target languages (filtered by available copies)
+4. Pick template style (minimal, modern, gradient, dark, playful)
+5. Preview and generate
+
+#### 4. Generation Results
+- Real-time progress monitoring
+- View all generated screenshots organized by locale
+- Download individual images or entire sets
+
+### Web GUI Workflow Example
+
+```bash
+# 1. Start the web server
+npm run dev:web
+
+# 2. Open http://localhost:3001 in your browser
+
+# 3. Create a new app
+#    - Name: "My Awesome App"
+#    - Description: "A productivity app for teams"
+
+# 4. Upload screenshots
+#    - Upload iPhone screenshot with title "Dashboard" and subtitle "Manage your tasks"
+#    - Upload iPad screenshot with same copy
+#    - Upload Android phone screenshot with same copy
+
+# 5. Manage copies
+#    - Click "Manage Copies" button
+#    - Edit English copies (default)
+#    - Click "Generate with AI" and select German, Japanese, Spanish
+#    - AI generates localized copies for each language
+
+# 6. Generate screenshots
+#    - Click "Generate Screenshots"
+#    - Select devices: iPhone, iPad, Android
+#    - Choose frame mode: Minimal
+#    - Select languages: en, de, ja, es
+#    - Pick template: Modern
+#    - Click "Generate Screenshots"
+
+# 7. Download results
+#    - Monitor real-time progress
+#    - View generated screenshots (3 devices × 4 languages = 12 images)
+#    - Download individual images
+```
+
+### Environment Configuration
+
+Create a `.env.local` file in the root directory:
+
+```bash
+# Required
+OPENAI_API_KEY=sk-...
+
+# Optional (defaults shown)
+DATABASE_PATH=./aperture-data/aperture.db
+UPLOADS_DIR=./aperture-data/uploads
+GENERATIONS_DIR=./aperture-data/generations
+```
+
+### Data Storage
+
+All data is stored locally in the `aperture-data/` directory:
+
+```
+aperture-data/
+├── aperture.db              # SQLite database (apps, screens, copies, generations)
+├── uploads/                 # User-uploaded screenshots
+│   └── {app_id}/
+│       └── {screen_id}.png
+└── generations/             # Generated marketing images
+    └── {generation_id}/
+        └── {locale}/
+            └── {screen_id}.png
+```
+
+### Technology Stack
+
+- **Frontend**: Next.js 14 (App Router), React, Tailwind CSS, shadcn/ui
+- **Backend**: Next.js API Routes
+- **Database**: SQLite (better-sqlite3)
+- **Image Processing**: Sharp (via existing TemplateEngine)
+- **AI**: OpenAI API (via existing TranslationService)
+
 ## License
 
 MIT

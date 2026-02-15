@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 dist/
+.next/
+out/
 
 # Logs
 logs/
@@ -46,6 +48,8 @@ Thumbs.db
 /output/
 /export/
 /cache/
+/aperture-data/
+/aperture-output/
 
 # Config (keep example, ignore user configs)
 aperture.config.json
