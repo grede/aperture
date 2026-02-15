@@ -14,9 +14,11 @@ export interface DataSchema {
 
 export class LocaleDataGenerator {
   private openai: OpenAI;
+  private model: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, model: string = 'gpt-4o-mini') {
     this.openai = new OpenAI({ apiKey });
+    this.model = model;
   }
 
   /**
@@ -26,15 +28,22 @@ export class LocaleDataGenerator {
     const systemPrompt = this.buildSystemPrompt();
     const userPrompt = this.buildUserPrompt(schema, locale);
 
-    const response = await this.openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    // Build request parameters
+    const requestParams: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
+      model: this.model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      temperature: 0.7, // More creative for diverse data
       response_format: { type: 'json_object' },
-    });
+    };
+
+    // Only set temperature for models that support it (o1 and gpt-5 series don't)
+    if (!this.model.startsWith('o1-') && !this.model.startsWith('gpt-5')) {
+      requestParams.temperature = 0.7; // More creative for diverse data
+    }
+
+    const response = await this.openai.chat.completions.create(requestParams);
 
     const content = response.choices[0]?.message?.content;
     if (!content) {

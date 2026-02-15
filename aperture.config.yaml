@@ -17,6 +17,9 @@ bundleId: com.example.myapp
 # bundleId: com.example.myapp
 # installApp: false  # Skip installation, launch existing app by bundleId
 
+# Brief description of your app for AI-generated marketing copy
+appDescription: "A mobile application for managing tasks and projects"
+
 # ────────────────────────────────────────────────────────────────
 # Flow Definition
 # ────────────────────────────────────────────────────────────────

@@ -10,6 +10,8 @@ import inquirer from 'inquirer';
 interface GenerateCopyOptions {
   regenerate?: boolean;
   locale?: string;
+  model?: string;
+  description?: string;
 }
 
 interface ScreenshotContext {
@@ -33,7 +35,27 @@ export async function generateCopyCommand(options: GenerateCopyOptions): Promise
       config.llm.apiKey = process.env[envVar] ?? '';
 
       if (!config.llm.apiKey) {
-        throw new Error(`Environment variable ${envVar} not set`);
+        console.log(chalk.yellow(`\n⚠  Environment variable ${envVar} not set\n`));
+
+        const { apiKey } = await inquirer.prompt([
+          {
+            type: 'password',
+            name: 'apiKey',
+            message: 'Please enter your OpenAI API key:',
+            validate: (input: string) => {
+              if (!input || input.trim().length === 0) {
+                return 'API key cannot be empty';
+              }
+              if (!input.startsWith('sk-')) {
+                return 'OpenAI API keys typically start with "sk-"';
+              }
+              return true;
+            },
+          },
+        ]);
+
+        config.llm.apiKey = apiKey;
+        console.log(chalk.dim('Using provided API key for this session\n'));
       }
     }
   } catch (error) {
@@ -41,15 +63,28 @@ export async function generateCopyCommand(options: GenerateCopyOptions): Promise
     process.exit(1);
   }
 
-  // Prompt for app description
-  const { appDescription } = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'appDescription',
-      message: 'Brief app description (for context):',
-      default: 'A mobile application',
-    },
-  ]);
+  // Get app description from config, command-line flag, or prompt
+  let appDescription: string;
+
+  if (options.description) {
+    // Command-line flag takes precedence
+    appDescription = options.description;
+  } else if (config.appDescription) {
+    // Use from config
+    appDescription = config.appDescription;
+    console.log(chalk.dim(`Using app description from config: "${appDescription}"\n`));
+  } else {
+    // Fall back to prompting
+    const answer = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'appDescription',
+        message: 'Brief app description (for context):',
+        default: 'A mobile application',
+      },
+    ]);
+    appDescription = answer.appDescription;
+  }
 
   // Find all screenshot labels from the first locale
   const firstLocale = config.locales[0];
@@ -90,7 +125,10 @@ export async function generateCopyCommand(options: GenerateCopyOptions): Promise
   }
 
   // Initialize translation service
-  const translationService = new TranslationService(config.llm.apiKey);
+  const model = options.model ?? config.llm.defaultModel;
+  const translationService = new TranslationService(config.llm.apiKey, model);
+
+  console.log(chalk.dim(`Using model: ${model}\n`));
 
   // Create locales directory
   await mkdir(join(process.cwd(), 'locales'), { recursive: true });

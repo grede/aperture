@@ -110,6 +110,7 @@ export interface ApertureConfig {
   app?: string; // Optional: only required if installApp is true
   bundleId: string;
   installApp?: boolean; // Optional: defaults to true. Set to false to launch existing app without installing
+  appDescription?: string; // Optional: brief app description for AI-generated marketing copy
   flow: string;
   locales: string[];
   devices: {

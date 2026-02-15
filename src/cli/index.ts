@@ -77,6 +77,7 @@ program
   .description('Generate locale-specific test data')
   .option('--regenerate', 'Overwrite existing locale data files')
   .option('--locale <locale>', 'Generate data for a single locale only')
+  .option('--model <model>', 'Override LLM model (e.g., gpt-4o, gpt-4o-mini)')
   .action(generateDataCommand);
 
 // Generate-copy command
@@ -85,6 +86,8 @@ program
   .description('Generate localized marketing copy')
   .option('--regenerate', 'Overwrite existing copy files')
   .option('--locale <locale>', 'Generate copy for a single locale only')
+  .option('--model <model>', 'Override LLM model (e.g., gpt-4o, gpt-4o-mini)')
+  .option('--description <text>', 'Override app description from config')
   .action(generateCopyCommand);
 
 // Parse arguments

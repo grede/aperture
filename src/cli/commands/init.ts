@@ -80,6 +80,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
     // Use defaults
     answers = {
       app: options.app ?? suggestedAppPath,
+      appDescription: 'A mobile application',
       locales: ['en-US'],
       iphone: iphones[0]?.name ?? 'iPhone 17 Pro Max',
       ipad: ipads[0]?.name ?? 'iPad Pro (13-inch) (M4)',
@@ -137,6 +138,12 @@ export async function initCommand(options: InitOptions): Promise<void> {
 
     // Continue with remaining prompts
     const remainingAnswers = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'appDescription',
+        message: 'Brief app description (for AI-generated marketing copy):',
+        default: 'A mobile application',
+      },
       {
         type: 'checkbox',
         name: 'locales',
@@ -239,6 +246,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
   const config: any = {
     app: answers.app,
     bundleId: 'com.example.myapp',
+    appDescription: answers.appDescription,
     flow: './aperture-flow.yaml',
     locales: answers.locales,
     devices: {

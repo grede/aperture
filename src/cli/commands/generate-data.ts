@@ -3,6 +3,7 @@ import { resolve, join } from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import YAML from 'yaml';
+import inquirer from 'inquirer';
 import { LocaleDataGenerator, type DataSchema } from '../../localization/locale-data-generator.js';
 import { FlowParser } from '../../core/flow-parser.js';
 import type { ApertureConfig } from '../../types/index.js';
@@ -10,6 +11,7 @@ import type { ApertureConfig } from '../../types/index.js';
 interface GenerateDataOptions {
   regenerate?: boolean;
   locale?: string;
+  model?: string;
 }
 
 export async function generateDataCommand(options: GenerateDataOptions): Promise<void> {
@@ -29,7 +31,27 @@ export async function generateDataCommand(options: GenerateDataOptions): Promise
       config.llm.apiKey = process.env[envVar] ?? '';
 
       if (!config.llm.apiKey) {
-        throw new Error(`Environment variable ${envVar} not set`);
+        console.log(chalk.yellow(`\n⚠  Environment variable ${envVar} not set\n`));
+
+        const { apiKey } = await inquirer.prompt([
+          {
+            type: 'password',
+            name: 'apiKey',
+            message: 'Please enter your OpenAI API key:',
+            validate: (input: string) => {
+              if (!input || input.trim().length === 0) {
+                return 'API key cannot be empty';
+              }
+              if (!input.startsWith('sk-')) {
+                return 'OpenAI API keys typically start with "sk-"';
+              }
+              return true;
+            },
+          },
+        ]);
+
+        config.llm.apiKey = apiKey;
+        console.log(chalk.dim('Using provided API key for this session\n'));
       }
     }
   } catch (error) {
@@ -70,7 +92,10 @@ export async function generateDataCommand(options: GenerateDataOptions): Promise
   const locales = options.locale ? [options.locale] : config.locales;
 
   // Initialize generator
-  const generator = new LocaleDataGenerator(config.llm.apiKey);
+  const model = options.model ?? config.llm.defaultModel;
+  const generator = new LocaleDataGenerator(config.llm.apiKey, model);
+
+  console.log(chalk.dim(`Using model: ${model}\n`));
 
   // Create locales directory
   await mkdir(join(process.cwd(), 'locales'), { recursive: true });

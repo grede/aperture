@@ -6,6 +6,6 @@ export const modernStyle: StyleConfig = {
   textPosition: 'top',
   textColor: '#FFFFFF',
   titleSize: 52,
-  subtitleSize: 26,
+  subtitleSize: 32,
   textPadding: 50,
 };

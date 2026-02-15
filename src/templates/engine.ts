@@ -610,8 +610,8 @@ export class TemplateEngine {
     style: StyleConfig,
     contentBottom: number
   ): string {
-    // Simple text wrapping for subtitle
-    const maxCharsPerLine = 40;
+    // Simple text wrapping for subtitle - increased for wider text
+    const maxCharsPerLine = 50;
     const subtitleLines = this.wrapText(subtitle, maxCharsPerLine);
     const subtitleBlockHeight = subtitleLines.length > 0
       ? style.subtitleSize + (subtitleLines.length - 1) * (style.subtitleSize + 10)
