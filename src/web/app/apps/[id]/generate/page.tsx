@@ -255,6 +255,8 @@ export default function GeneratePage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [suggestingGradient, setSuggestingGradient] = useState(false);
+  const [gradientSuggestionError, setGradientSuggestionError] = useState<string | null>(null);
   const previewRequestIdRef = useRef(0);
 
   const availableDevices = useMemo(() => {
@@ -555,6 +557,7 @@ export default function GeneratePage() {
     if (!normalized) {
       return;
     }
+    setGradientSuggestionError(null);
     if (key === 'from') {
       setGradientFrom(normalized);
       return;
@@ -564,8 +567,73 @@ export default function GeneratePage() {
 
   const selectGradientPreset = (from: string, to: string) => {
     setBackgroundMode('gradient');
+    setGradientSuggestionError(null);
     setGradientFrom(from.toUpperCase());
     setGradientTo(to.toUpperCase());
+  };
+
+  const suggestGradientWithAi = async () => {
+    if (!app || selectedDevices.length === 0) {
+      setGradientSuggestionError('Select at least one device first.');
+      return;
+    }
+
+    const suggestionDevice = selectedDevices[0];
+    const suggestionScreen =
+      app.screens.find((screen) => screen.device_type === suggestionDevice) || app.screens[0];
+
+    if (!suggestionScreen) {
+      setGradientSuggestionError('No screenshots found for this app.');
+      return;
+    }
+
+    setSuggestingGradient(true);
+    setGradientSuggestionError(null);
+
+    try {
+      const imageResponse = await fetch(`/api/uploads/${suggestionScreen.screenshot_path}`);
+      if (!imageResponse.ok) {
+        throw new Error('Failed to load source screenshot');
+      }
+
+      const imageBuffer = await imageResponse.arrayBuffer();
+      const screenshotBase64 = bufferToBase64(imageBuffer);
+
+      const response = await fetch('/api/templates/suggest-gradient', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          screenshot_base64: screenshotBase64,
+          app_name: app.name,
+          app_description: app.description,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to suggest gradient colors');
+      }
+
+      const payload = await response.json();
+      const fromColor = normalizeHexColor(payload?.data?.from || '');
+      const toColor = normalizeHexColor(payload?.data?.to || '');
+
+      if (!fromColor || !toColor) {
+        throw new Error('AI returned invalid color values');
+      }
+
+      setBackgroundMode('gradient');
+      setGradientFrom(fromColor);
+      setGradientTo(toColor);
+    } catch (suggestionError) {
+      setGradientSuggestionError(
+        suggestionError instanceof Error
+          ? suggestionError.message
+          : 'Failed to suggest gradient colors'
+      );
+    } finally {
+      setSuggestingGradient(false);
+    }
   };
 
   const selectFontColor = (value: string) => {
@@ -893,6 +961,24 @@ export default function GeneratePage() {
                     </div>
                   </div>
                 </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={suggestGradientWithAi}
+                    disabled={suggestingGradient || selectedDevices.length === 0}
+                  >
+                    {suggestingGradient ? 'Suggesting...' : 'Suggest with AI'}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Uses the first selected device screenshot to match your app palette.
+                  </p>
+                </div>
+                {gradientSuggestionError && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {gradientSuggestionError}
+                  </p>
+                )}
                 <div className="grid gap-2 sm:grid-cols-2">
                   {GRADIENT_PRESETS.map((preset) => {
                     const isSelected =

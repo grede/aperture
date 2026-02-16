@@ -191,6 +191,15 @@ export const templatePreviewSchema = z.object({
 });
 
 /**
+ * Gradient suggestion request schema
+ */
+export const suggestGradientSchema = z.object({
+  screenshot_base64: z.string().min(1, 'Screenshot is required'),
+  app_name: z.string().min(1).max(100).optional(),
+  app_description: z.string().min(1).max(500).optional(),
+});
+
+/**
  * Pagination schema
  */
 export const paginationSchema = z.object({
