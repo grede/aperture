@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { migrate } from './migrations';
+import { ensureWebEnvLoaded } from './env';
 import type {
   App,
   Screen,
@@ -15,6 +16,8 @@ import type {
 } from '../types';
 import { join } from 'path';
 import { mkdirSync } from 'fs';
+
+ensureWebEnvLoaded();
 
 const DB_PATH = process.env.DATABASE_PATH || './aperture-data/aperture.db';
 

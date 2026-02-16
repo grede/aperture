@@ -4,6 +4,9 @@
  */
 
 import { NextRequest } from 'next/server';
+import { ensureWebEnvLoaded } from '@/lib/env';
+
+ensureWebEnvLoaded();
 
 export async function GET(request: NextRequest) {
   const hasApiKey = !!process.env.OPENAI_API_KEY;

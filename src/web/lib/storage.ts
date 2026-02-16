@@ -5,6 +5,9 @@
 import { mkdir, writeFile, readFile, unlink, rm } from 'fs/promises';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
+import { ensureWebEnvLoaded } from './env';
+
+ensureWebEnvLoaded();
 
 /**
  * Base directories for file storage

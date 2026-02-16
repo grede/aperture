@@ -3,6 +3,9 @@
  */
 
 import { TranslationService as CoreTranslationService } from '../../localization/translation-service';
+import { ensureWebEnvLoaded } from '../lib/env';
+
+ensureWebEnvLoaded();
 
 /**
  * Web translation service for AI-powered copy generation

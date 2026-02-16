@@ -3,12 +3,15 @@
  */
 
 import { TemplateEngine } from '../../templates/engine';
+import { ensureWebEnvLoaded } from '../lib/env';
 import type {
   TemplateStyle,
   TemplateDeviceType,
   TemplateFrameMode,
   TemplateBackground,
 } from '../../types';
+
+ensureWebEnvLoaded();
 
 /**
  * Template service for generating marketing screenshots

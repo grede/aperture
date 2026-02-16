@@ -6,6 +6,9 @@
 import { NextRequest } from 'next/server';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
+import { ensureWebEnvLoaded } from '@/lib/env';
+
+ensureWebEnvLoaded();
 
 export async function GET(
   request: NextRequest,
