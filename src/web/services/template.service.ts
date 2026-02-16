@@ -9,6 +9,7 @@ import type {
   TemplateDeviceType,
   TemplateFrameMode,
   TemplateBackground,
+  TemplateTextStyle,
 } from '../../types';
 
 ensureWebEnvLoaded();
@@ -27,6 +28,8 @@ export class TemplateService {
    * Generate a marketing screenshot
    * @param screenshotBuffer - Original screenshot buffer
    * @param style - Template style to use
+   * @param background - User-selected template background
+   * @param textStyle - Optional text style overrides
    * @param deviceType - Device type (iPhone, iPad, Android)
    * @param title - Marketing title
    * @param subtitle - Marketing subtitle (optional)
@@ -38,6 +41,7 @@ export class TemplateService {
     screenshotBuffer: Buffer,
     style: TemplateStyle,
     background: TemplateBackground | undefined,
+    textStyle: TemplateTextStyle | undefined,
     deviceType: TemplateDeviceType,
     title: string,
     subtitle: string,
@@ -49,6 +53,7 @@ export class TemplateService {
       screenshot: screenshotBuffer,
       style,
       background,
+      textStyle,
       deviceType,
       title,
       subtitle,
@@ -71,6 +76,8 @@ export class TemplateService {
    * Generate a preview image (for template selection)
    * @param screenshotBuffer - Screenshot buffer
    * @param style - Template style
+   * @param background - User-selected template background
+   * @param textStyle - Optional text style overrides
    * @param deviceType - Device type
    * @param title - Sample title
    * @param subtitle - Sample subtitle
@@ -81,6 +88,7 @@ export class TemplateService {
     screenshotBuffer: Buffer,
     style: TemplateStyle,
     background: TemplateBackground | undefined,
+    textStyle: TemplateTextStyle | undefined,
     deviceType: TemplateDeviceType,
     title: string,
     subtitle: string,
@@ -91,6 +99,7 @@ export class TemplateService {
       screenshot: screenshotBuffer,
       style,
       background,
+      textStyle,
       deviceType,
       title,
       subtitle: subtitle || undefined,

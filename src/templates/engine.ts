@@ -1,9 +1,13 @@
 import sharp from 'sharp';
+import { readdirSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import type {
   CompositeOptions,
   TemplateBackground,
   TemplateDeviceType,
   TemplateStyle,
+  TemplateTextStyle,
 } from '../types/index.js';
 import { minimalStyle, type StyleConfig } from './styles/minimal.js';
 import { modernStyle } from './styles/modern.js';
@@ -11,6 +15,8 @@ import { gradientStyle } from './styles/gradient.js';
 import { darkStyle } from './styles/dark.js';
 import { playfulStyle } from './styles/playful.js';
 import { resolveRealisticFrameAsset } from './realistic-frame-assets.js';
+
+const require = createRequire(import.meta.url);
 
 const EXPORT_DIMENSIONS: Record<TemplateDeviceType, { width: number; height: number }> = {
   iPhone: { width: 1242, height: 2688 }, // iPhone 6.5" (iPhone 15 Pro Max)
@@ -65,6 +71,19 @@ interface LayerResult {
   contentBottom: number;
 }
 
+interface TextRenderStyle extends StyleConfig {
+  fontFamily: string;
+  fontFaceCSS: string;
+}
+
+type TemplateFontFamily = NonNullable<TemplateTextStyle['fontFamily']>;
+type FontWeight = 400 | 700;
+
+interface FontSourceDescriptor {
+  packageName: string;
+  familyName: string;
+}
+
 const MINIMAL_FRAME_PRESETS: Record<TemplateDeviceType, MinimalFramePreset> = {
   iPhone: {
     outerAspect: 430 / 932,
@@ -110,6 +129,202 @@ const MINIMAL_FRAME_PRESETS: Record<TemplateDeviceType, MinimalFramePreset> = {
   },
 };
 
+const FONT_FAMILY_STACKS: Record<TemplateFontFamily, string> = {
+  system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
+  helvetica: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+  georgia: "Georgia, 'Times New Roman', Times, serif",
+  avenir: "Avenir Next, Avenir, 'Segoe UI', Helvetica, Arial, sans-serif",
+  courier: "'Courier New', Courier, monospace",
+  inter: "Inter, 'Segoe UI', Helvetica, Arial, sans-serif",
+  roboto: "Roboto, 'Segoe UI', Helvetica, Arial, sans-serif",
+  open_sans: "'Open Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  poppins: "Poppins, 'Segoe UI', Helvetica, Arial, sans-serif",
+  montserrat: "Montserrat, 'Segoe UI', Helvetica, Arial, sans-serif",
+  lato: "Lato, 'Segoe UI', Helvetica, Arial, sans-serif",
+  oswald: "Oswald, 'Arial Narrow', Arial, sans-serif",
+  raleway: "Raleway, 'Segoe UI', Helvetica, Arial, sans-serif",
+  nunito: "Nunito, 'Segoe UI', Helvetica, Arial, sans-serif",
+  playfair_display: "Playfair Display, Georgia, 'Times New Roman', serif",
+  merriweather: "Merriweather, Georgia, 'Times New Roman', serif",
+  lora: "Lora, Georgia, 'Times New Roman', serif",
+  source_sans_3: "Source Sans 3, 'Segoe UI', Helvetica, Arial, sans-serif",
+  dm_sans: "DM Sans, 'Segoe UI', Helvetica, Arial, sans-serif",
+  rubik: "Rubik, 'Segoe UI', Helvetica, Arial, sans-serif",
+  manrope: "Manrope, 'Segoe UI', Helvetica, Arial, sans-serif",
+  work_sans: "'Work Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  fira_sans: "'Fira Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  pt_sans: "'PT Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  karla: "Karla, 'Segoe UI', Helvetica, Arial, sans-serif",
+  jost: "Jost, 'Segoe UI', Helvetica, Arial, sans-serif",
+  barlow: "Barlow, 'Segoe UI', Helvetica, Arial, sans-serif",
+  quicksand: "Quicksand, 'Segoe UI', Helvetica, Arial, sans-serif",
+  bebas_neue: "'Bebas Neue', 'Arial Narrow', Arial, sans-serif",
+  space_grotesk: "'Space Grotesk', 'Segoe UI', Helvetica, Arial, sans-serif",
+  ubuntu: "Ubuntu, 'Segoe UI', Helvetica, Arial, sans-serif",
+  josefin_sans: "'Josefin Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  libre_baskerville: "'Libre Baskerville', Georgia, 'Times New Roman', serif",
+  libre_franklin: "'Libre Franklin', 'Segoe UI', Helvetica, Arial, sans-serif",
+  mukta: "Mukta, 'Segoe UI', Helvetica, Arial, sans-serif",
+  oxygen: "Oxygen, 'Segoe UI', Helvetica, Arial, sans-serif",
+  exo_2: "'Exo 2', 'Segoe UI', Helvetica, Arial, sans-serif",
+  inconsolata: "Inconsolata, 'Courier New', Courier, monospace",
+  merriweather_sans: "'Merriweather Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  teko: "Teko, 'Arial Narrow', Arial, sans-serif",
+  anton: "Anton, 'Arial Narrow', Arial, sans-serif",
+  archivo: "Archivo, 'Segoe UI', Helvetica, Arial, sans-serif",
+  assistant: "Assistant, 'Segoe UI', Helvetica, Arial, sans-serif",
+  asap: "Asap, 'Segoe UI', Helvetica, Arial, sans-serif",
+  barlow_condensed: "'Barlow Condensed', 'Arial Narrow', Arial, sans-serif",
+  figtree: "Figtree, 'Segoe UI', Helvetica, Arial, sans-serif",
+  public_sans: "'Public Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  red_hat_display: "'Red Hat Display', 'Segoe UI', Helvetica, Arial, sans-serif",
+  red_hat_text: "'Red Hat Text', 'Segoe UI', Helvetica, Arial, sans-serif",
+  sora: "Sora, 'Segoe UI', Helvetica, Arial, sans-serif",
+  plus_jakarta_sans: "'Plus Jakarta Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  epilogue: "Epilogue, 'Segoe UI', Helvetica, Arial, sans-serif",
+  lexend: "Lexend, 'Segoe UI', Helvetica, Arial, sans-serif",
+  inter_tight: "'Inter Tight', 'Segoe UI', Helvetica, Arial, sans-serif",
+  fraunces: "Fraunces, Georgia, 'Times New Roman', serif",
+  cormorant_garamond: "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
+  crimson_pro: "'Crimson Pro', Georgia, 'Times New Roman', serif",
+  cabin: "Cabin, 'Segoe UI', Helvetica, Arial, sans-serif",
+  titillium_web: "'Titillium Web', 'Segoe UI', Helvetica, Arial, sans-serif",
+  hind: "Hind, 'Segoe UI', Helvetica, Arial, sans-serif",
+  prompt: "Prompt, 'Segoe UI', Helvetica, Arial, sans-serif",
+  arimo: "Arimo, 'Segoe UI', Helvetica, Arial, sans-serif",
+  heebo: "Heebo, 'Segoe UI', Helvetica, Arial, sans-serif",
+  kanit: "Kanit, 'Segoe UI', Helvetica, Arial, sans-serif",
+  dosis: "Dosis, 'Segoe UI', Helvetica, Arial, sans-serif",
+};
+
+const FONTSOURCE_FONT_MAP: Partial<Record<TemplateFontFamily, FontSourceDescriptor>> = {
+  inter: { packageName: '@fontsource/inter', familyName: 'Inter' },
+  roboto: { packageName: '@fontsource/roboto', familyName: 'Roboto' },
+  open_sans: { packageName: '@fontsource/open-sans', familyName: 'Open Sans' },
+  poppins: { packageName: '@fontsource/poppins', familyName: 'Poppins' },
+  montserrat: { packageName: '@fontsource/montserrat', familyName: 'Montserrat' },
+  lato: { packageName: '@fontsource/lato', familyName: 'Lato' },
+  oswald: { packageName: '@fontsource/oswald', familyName: 'Oswald' },
+  raleway: { packageName: '@fontsource/raleway', familyName: 'Raleway' },
+  nunito: { packageName: '@fontsource/nunito', familyName: 'Nunito' },
+  playfair_display: { packageName: '@fontsource/playfair-display', familyName: 'Playfair Display' },
+  merriweather: { packageName: '@fontsource/merriweather', familyName: 'Merriweather' },
+  lora: { packageName: '@fontsource/lora', familyName: 'Lora' },
+  source_sans_3: { packageName: '@fontsource/source-sans-3', familyName: 'Source Sans 3' },
+  dm_sans: { packageName: '@fontsource/dm-sans', familyName: 'DM Sans' },
+  rubik: { packageName: '@fontsource/rubik', familyName: 'Rubik' },
+  manrope: { packageName: '@fontsource/manrope', familyName: 'Manrope' },
+  work_sans: { packageName: '@fontsource/work-sans', familyName: 'Work Sans' },
+  fira_sans: { packageName: '@fontsource/fira-sans', familyName: 'Fira Sans' },
+  pt_sans: { packageName: '@fontsource/pt-sans', familyName: 'PT Sans' },
+  karla: { packageName: '@fontsource/karla', familyName: 'Karla' },
+  jost: { packageName: '@fontsource/jost', familyName: 'Jost' },
+  barlow: { packageName: '@fontsource/barlow', familyName: 'Barlow' },
+  quicksand: { packageName: '@fontsource/quicksand', familyName: 'Quicksand' },
+  bebas_neue: { packageName: '@fontsource/bebas-neue', familyName: 'Bebas Neue' },
+  space_grotesk: { packageName: '@fontsource/space-grotesk', familyName: 'Space Grotesk' },
+  ubuntu: { packageName: '@fontsource/ubuntu', familyName: 'Ubuntu' },
+  josefin_sans: { packageName: '@fontsource/josefin-sans', familyName: 'Josefin Sans' },
+  libre_baskerville: { packageName: '@fontsource/libre-baskerville', familyName: 'Libre Baskerville' },
+  libre_franklin: { packageName: '@fontsource/libre-franklin', familyName: 'Libre Franklin' },
+  mukta: { packageName: '@fontsource/mukta', familyName: 'Mukta' },
+  oxygen: { packageName: '@fontsource/oxygen', familyName: 'Oxygen' },
+  exo_2: { packageName: '@fontsource/exo-2', familyName: 'Exo 2' },
+  inconsolata: { packageName: '@fontsource/inconsolata', familyName: 'Inconsolata' },
+  merriweather_sans: { packageName: '@fontsource/merriweather-sans', familyName: 'Merriweather Sans' },
+  teko: { packageName: '@fontsource/teko', familyName: 'Teko' },
+  anton: { packageName: '@fontsource/anton', familyName: 'Anton' },
+  archivo: { packageName: '@fontsource/archivo', familyName: 'Archivo' },
+  assistant: { packageName: '@fontsource/assistant', familyName: 'Assistant' },
+  asap: { packageName: '@fontsource/asap', familyName: 'Asap' },
+  barlow_condensed: { packageName: '@fontsource/barlow-condensed', familyName: 'Barlow Condensed' },
+  figtree: { packageName: '@fontsource/figtree', familyName: 'Figtree' },
+  public_sans: { packageName: '@fontsource/public-sans', familyName: 'Public Sans' },
+  red_hat_display: { packageName: '@fontsource/red-hat-display', familyName: 'Red Hat Display' },
+  red_hat_text: { packageName: '@fontsource/red-hat-text', familyName: 'Red Hat Text' },
+  sora: { packageName: '@fontsource/sora', familyName: 'Sora' },
+  plus_jakarta_sans: { packageName: '@fontsource/plus-jakarta-sans', familyName: 'Plus Jakarta Sans' },
+  epilogue: { packageName: '@fontsource/epilogue', familyName: 'Epilogue' },
+  lexend: { packageName: '@fontsource/lexend', familyName: 'Lexend' },
+  inter_tight: { packageName: '@fontsource/inter-tight', familyName: 'Inter Tight' },
+  fraunces: { packageName: '@fontsource/fraunces', familyName: 'Fraunces' },
+  cormorant_garamond: { packageName: '@fontsource/cormorant-garamond', familyName: 'Cormorant Garamond' },
+  crimson_pro: { packageName: '@fontsource/crimson-pro', familyName: 'Crimson Pro' },
+  cabin: { packageName: '@fontsource/cabin', familyName: 'Cabin' },
+  titillium_web: { packageName: '@fontsource/titillium-web', familyName: 'Titillium Web' },
+  hind: { packageName: '@fontsource/hind', familyName: 'Hind' },
+  prompt: { packageName: '@fontsource/prompt', familyName: 'Prompt' },
+  arimo: { packageName: '@fontsource/arimo', familyName: 'Arimo' },
+  heebo: { packageName: '@fontsource/heebo', familyName: 'Heebo' },
+  kanit: { packageName: '@fontsource/kanit', familyName: 'Kanit' },
+  dosis: { packageName: '@fontsource/dosis', familyName: 'Dosis' },
+};
+
+const FONTSOURCE_PACKAGE_JSON_PATHS: Partial<Record<TemplateFontFamily, string>> = {
+  inter: require.resolve('@fontsource/inter/package.json'),
+  roboto: require.resolve('@fontsource/roboto/package.json'),
+  open_sans: require.resolve('@fontsource/open-sans/package.json'),
+  poppins: require.resolve('@fontsource/poppins/package.json'),
+  montserrat: require.resolve('@fontsource/montserrat/package.json'),
+  lato: require.resolve('@fontsource/lato/package.json'),
+  oswald: require.resolve('@fontsource/oswald/package.json'),
+  raleway: require.resolve('@fontsource/raleway/package.json'),
+  nunito: require.resolve('@fontsource/nunito/package.json'),
+  playfair_display: require.resolve('@fontsource/playfair-display/package.json'),
+  merriweather: require.resolve('@fontsource/merriweather/package.json'),
+  lora: require.resolve('@fontsource/lora/package.json'),
+  source_sans_3: require.resolve('@fontsource/source-sans-3/package.json'),
+  dm_sans: require.resolve('@fontsource/dm-sans/package.json'),
+  rubik: require.resolve('@fontsource/rubik/package.json'),
+  manrope: require.resolve('@fontsource/manrope/package.json'),
+  work_sans: require.resolve('@fontsource/work-sans/package.json'),
+  fira_sans: require.resolve('@fontsource/fira-sans/package.json'),
+  pt_sans: require.resolve('@fontsource/pt-sans/package.json'),
+  karla: require.resolve('@fontsource/karla/package.json'),
+  jost: require.resolve('@fontsource/jost/package.json'),
+  barlow: require.resolve('@fontsource/barlow/package.json'),
+  quicksand: require.resolve('@fontsource/quicksand/package.json'),
+  bebas_neue: require.resolve('@fontsource/bebas-neue/package.json'),
+  space_grotesk: require.resolve('@fontsource/space-grotesk/package.json'),
+  ubuntu: require.resolve('@fontsource/ubuntu/package.json'),
+  josefin_sans: require.resolve('@fontsource/josefin-sans/package.json'),
+  libre_baskerville: require.resolve('@fontsource/libre-baskerville/package.json'),
+  libre_franklin: require.resolve('@fontsource/libre-franklin/package.json'),
+  mukta: require.resolve('@fontsource/mukta/package.json'),
+  oxygen: require.resolve('@fontsource/oxygen/package.json'),
+  exo_2: require.resolve('@fontsource/exo-2/package.json'),
+  inconsolata: require.resolve('@fontsource/inconsolata/package.json'),
+  merriweather_sans: require.resolve('@fontsource/merriweather-sans/package.json'),
+  teko: require.resolve('@fontsource/teko/package.json'),
+  anton: require.resolve('@fontsource/anton/package.json'),
+  archivo: require.resolve('@fontsource/archivo/package.json'),
+  assistant: require.resolve('@fontsource/assistant/package.json'),
+  asap: require.resolve('@fontsource/asap/package.json'),
+  barlow_condensed: require.resolve('@fontsource/barlow-condensed/package.json'),
+  figtree: require.resolve('@fontsource/figtree/package.json'),
+  public_sans: require.resolve('@fontsource/public-sans/package.json'),
+  red_hat_display: require.resolve('@fontsource/red-hat-display/package.json'),
+  red_hat_text: require.resolve('@fontsource/red-hat-text/package.json'),
+  sora: require.resolve('@fontsource/sora/package.json'),
+  plus_jakarta_sans: require.resolve('@fontsource/plus-jakarta-sans/package.json'),
+  epilogue: require.resolve('@fontsource/epilogue/package.json'),
+  lexend: require.resolve('@fontsource/lexend/package.json'),
+  inter_tight: require.resolve('@fontsource/inter-tight/package.json'),
+  fraunces: require.resolve('@fontsource/fraunces/package.json'),
+  cormorant_garamond: require.resolve('@fontsource/cormorant-garamond/package.json'),
+  crimson_pro: require.resolve('@fontsource/crimson-pro/package.json'),
+  cabin: require.resolve('@fontsource/cabin/package.json'),
+  titillium_web: require.resolve('@fontsource/titillium-web/package.json'),
+  hind: require.resolve('@fontsource/hind/package.json'),
+  prompt: require.resolve('@fontsource/prompt/package.json'),
+  arimo: require.resolve('@fontsource/arimo/package.json'),
+  heebo: require.resolve('@fontsource/heebo/package.json'),
+  kanit: require.resolve('@fontsource/kanit/package.json'),
+  dosis: require.resolve('@fontsource/dosis/package.json'),
+};
+
+const FONT_FACE_CSS_CACHE = new Map<TemplateFontFamily, string>();
+
 export class TemplateEngine {
   private styles: Map<TemplateStyle, StyleConfig>;
 
@@ -134,6 +349,7 @@ export class TemplateEngine {
     const style = options.background
       ? this.withAutoTextColor(baseStyle, options.background)
       : baseStyle;
+    const textRenderStyle = this.resolveTextStyle(style, options.textStyle);
 
     const dimensions = EXPORT_DIMENSIONS[options.deviceType];
     if (!dimensions) {
@@ -187,7 +403,7 @@ export class TemplateEngine {
       options.subtitle ?? '',
       dimensions.width,
       dimensions.height,
-      style,
+      textRenderStyle,
       layerResult.contentBottom
     );
 
@@ -620,6 +836,118 @@ export class TemplateEngine {
     return { ...style, textColor };
   }
 
+  private resolveTextStyle(style: StyleConfig, textStyle?: TemplateTextStyle): TextRenderStyle {
+    const resolvedTitleSize = textStyle?.fontSize
+      ? Math.max(16, Math.round(textStyle.fontSize))
+      : style.titleSize;
+    const resolvedSubtitleSize = textStyle?.fontSize
+      ? Math.max(12, Math.round(textStyle.fontSize * 0.55))
+      : style.subtitleSize;
+    const fontFamilyKey = textStyle?.fontFamily ?? 'system';
+
+    return {
+      ...style,
+      titleSize: resolvedTitleSize,
+      subtitleSize: resolvedSubtitleSize,
+      textColor: textStyle?.fontColor || style.textColor,
+      fontFamily: FONT_FAMILY_STACKS[fontFamilyKey],
+      fontFaceCSS: this.getFontFaceCSS(fontFamilyKey),
+    };
+  }
+
+  private getFontFaceCSS(fontFamilyKey: TemplateFontFamily): string {
+    const cached = FONT_FACE_CSS_CACHE.get(fontFamilyKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const descriptor = FONTSOURCE_FONT_MAP[fontFamilyKey];
+    const packageJsonPath = FONTSOURCE_PACKAGE_JSON_PATHS[fontFamilyKey];
+
+    if (!descriptor || !packageJsonPath) {
+      FONT_FACE_CSS_CACHE.set(fontFamilyKey, '');
+      return '';
+    }
+
+    try {
+      const filesDir = join(dirname(packageJsonPath), 'files');
+      const files = readdirSync(filesDir);
+
+      const file400 = this.resolveFontFile(files, descriptor.packageName, 400);
+      const file700 = this.resolveFontFile(files, descriptor.packageName, 700) || file400;
+
+      if (!file400) {
+        FONT_FACE_CSS_CACHE.set(fontFamilyKey, '');
+        return '';
+      }
+
+      const rules = [
+        this.buildFontFaceRule(join(filesDir, file400), descriptor.familyName, 400),
+        file700 ? this.buildFontFaceRule(join(filesDir, file700), descriptor.familyName, 700) : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      FONT_FACE_CSS_CACHE.set(fontFamilyKey, rules);
+      return rules;
+    } catch {
+      FONT_FACE_CSS_CACHE.set(fontFamilyKey, '');
+      return '';
+    }
+  }
+
+  private resolveFontFile(
+    files: string[],
+    packageName: string,
+    weight: FontWeight
+  ): string | null {
+    const familyToken = packageName.split('/').pop() || '';
+    const patterns = [
+      `${familyToken}-latin-${weight}-normal`,
+      `latin-${weight}-normal`,
+      `${weight}-normal`,
+      `${familyToken}-latin-wght-normal`,
+      'latin-wght-normal',
+      'wght-normal',
+    ];
+
+    for (const pattern of patterns) {
+      const exactWoff2 = `${pattern}.woff2`;
+      if (files.includes(exactWoff2)) {
+        return exactWoff2;
+      }
+      const exactWoff = `${pattern}.woff`;
+      if (files.includes(exactWoff)) {
+        return exactWoff;
+      }
+
+      const partialWoff2 = files.find((file) => file.endsWith('.woff2') && file.includes(pattern));
+      if (partialWoff2) {
+        return partialWoff2;
+      }
+      const partialWoff = files.find((file) => file.endsWith('.woff') && file.includes(pattern));
+      if (partialWoff) {
+        return partialWoff;
+      }
+    }
+
+    return (
+      files.find((file) => file.endsWith('.woff2') && file.includes('400-normal')) ||
+      files.find((file) => file.endsWith('.woff') && file.includes('400-normal')) ||
+      null
+    );
+  }
+
+  private buildFontFaceRule(filePath: string, familyName: string, weight: FontWeight): string {
+    const fileBuffer = readFileSync(filePath);
+    const base64 = fileBuffer.toString('base64');
+    const isWoff2 = filePath.endsWith('.woff2');
+    const mimeType = isWoff2 ? 'font/woff2' : 'font/woff';
+    const format = isWoff2 ? 'woff2' : 'woff';
+
+    return `@font-face { font-family: '${this.escapeCSSString(familyName)}'; src: url(data:${mimeType};base64,${base64}) format('${format}'); font-style: normal; font-weight: ${weight}; font-display: swap; }`;
+  }
+
   private getContrastingTextColor(background: TemplateBackground): string {
     if (background.mode === 'solid') {
       const rgb = this.parseHexColor(background.color);
@@ -701,36 +1029,39 @@ export class TemplateEngine {
     subtitle: string,
     canvasWidth: number,
     canvasHeight: number,
-    style: StyleConfig,
+    style: TextRenderStyle,
     contentBottom: number
   ): string {
-    // Simple text wrapping for subtitle - increased for wider text
-    const maxCharsPerLine = 50;
+    const titleSubtitleGap = Math.max(10, Math.round(style.titleSize * 0.28));
+    const subtitleLineGap = Math.max(8, Math.round(style.subtitleSize * 0.42));
+    const maxCharsPerLine = Math.max(18, Math.round((50 * 24) / style.subtitleSize));
     const subtitleLines = this.wrapText(subtitle, maxCharsPerLine);
     const subtitleBlockHeight =
       subtitleLines.length > 0
-        ? style.subtitleSize + (subtitleLines.length - 1) * (style.subtitleSize + 10)
+        ? style.subtitleSize + (subtitleLines.length - 1) * (style.subtitleSize + subtitleLineGap)
         : 0;
 
     const topTitleY = style.textPadding + style.titleSize;
     const bottomTitleTarget = contentBottom + style.textPadding + style.titleSize;
-    const bottomSafeLimit = canvasHeight - style.textPadding - subtitleBlockHeight - 14;
+    const bottomSafeLimit =
+      canvasHeight - style.textPadding - subtitleBlockHeight - titleSubtitleGap;
     const titleY =
       style.textPosition === 'top' ? topTitleY : Math.min(bottomTitleTarget, bottomSafeLimit);
-    const subtitleY = titleY + style.titleSize + 14;
+    const subtitleY = titleY + style.titleSize + titleSubtitleGap;
 
     return `
       <svg width="${canvasWidth}" height="${canvasHeight}">
         <style>
+          ${style.fontFaceCSS}
           .title {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            font-family: ${style.fontFamily};
             font-size: ${style.titleSize}px;
             font-weight: 700;
             fill: ${style.textColor};
             text-anchor: middle;
           }
           .subtitle {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            font-family: ${style.fontFamily};
             font-size: ${style.subtitleSize}px;
             font-weight: 400;
             fill: ${style.textColor};
@@ -742,7 +1073,7 @@ export class TemplateEngine {
         ${subtitleLines
           .map(
             (line, i) =>
-              `<text x="${canvasWidth / 2}" y="${subtitleY + i * (style.subtitleSize + 10)}" class="subtitle">${this.escapeXML(line)}</text>`
+              `<text x="${canvasWidth / 2}" y="${subtitleY + i * (style.subtitleSize + subtitleLineGap)}" class="subtitle">${this.escapeXML(line)}</text>`
           )
           .join('')}
       </svg>
@@ -785,6 +1116,10 @@ export class TemplateEngine {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;');
+  }
+
+  private escapeCSSString(value: string): string {
+    return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   }
 
   /**

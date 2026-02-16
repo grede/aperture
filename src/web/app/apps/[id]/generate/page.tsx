@@ -8,7 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DEVICE_TYPE_LABELS, SUPPORTED_LOCALES } from '@/lib/constants';
+import {
+  DEVICE_TYPE_LABELS,
+  SUPPORTED_LOCALES,
+  TEMPLATE_FONT_OPTIONS,
+  TEMPLATE_FONT_SIZE_LIMITS,
+} from '@/lib/constants';
 import type {
   AppWithScreens,
   CopiesByScreenAndLocale,
@@ -16,6 +21,7 @@ import type {
   FrameAssetFilesByDevice,
   FrameMode,
   FrameModesByDevice,
+  TemplateFontFamily,
   TemplateBackground,
   TemplateStyle,
 } from '@/types';
@@ -41,6 +47,73 @@ const GRADIENT_PRESETS = [
   { from: '#22C55E', to: '#3B82F6', label: 'Fresh Ocean' },
   { from: '#F97316', to: '#EF4444', label: 'Warm Glow' },
 ];
+const FONT_PREVIEW_STACKS: Record<TemplateFontFamily, string> = {
+  system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
+  helvetica: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+  georgia: "Georgia, 'Times New Roman', Times, serif",
+  avenir: "Avenir Next, Avenir, 'Segoe UI', Helvetica, Arial, sans-serif",
+  courier: "'Courier New', Courier, monospace",
+  inter: "Inter, 'Segoe UI', Helvetica, Arial, sans-serif",
+  roboto: "Roboto, 'Segoe UI', Helvetica, Arial, sans-serif",
+  open_sans: "'Open Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  poppins: "Poppins, 'Segoe UI', Helvetica, Arial, sans-serif",
+  montserrat: "Montserrat, 'Segoe UI', Helvetica, Arial, sans-serif",
+  lato: "Lato, 'Segoe UI', Helvetica, Arial, sans-serif",
+  oswald: "Oswald, 'Arial Narrow', Arial, sans-serif",
+  raleway: "Raleway, 'Segoe UI', Helvetica, Arial, sans-serif",
+  nunito: "Nunito, 'Segoe UI', Helvetica, Arial, sans-serif",
+  playfair_display: "Playfair Display, Georgia, 'Times New Roman', serif",
+  merriweather: "Merriweather, Georgia, 'Times New Roman', serif",
+  lora: "Lora, Georgia, 'Times New Roman', serif",
+  source_sans_3: "Source Sans 3, 'Segoe UI', Helvetica, Arial, sans-serif",
+  dm_sans: "DM Sans, 'Segoe UI', Helvetica, Arial, sans-serif",
+  rubik: "Rubik, 'Segoe UI', Helvetica, Arial, sans-serif",
+  manrope: "Manrope, 'Segoe UI', Helvetica, Arial, sans-serif",
+  work_sans: "'Work Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  fira_sans: "'Fira Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  pt_sans: "'PT Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  karla: "Karla, 'Segoe UI', Helvetica, Arial, sans-serif",
+  jost: "Jost, 'Segoe UI', Helvetica, Arial, sans-serif",
+  barlow: "Barlow, 'Segoe UI', Helvetica, Arial, sans-serif",
+  quicksand: "Quicksand, 'Segoe UI', Helvetica, Arial, sans-serif",
+  bebas_neue: "'Bebas Neue', 'Arial Narrow', Arial, sans-serif",
+  space_grotesk: "'Space Grotesk', 'Segoe UI', Helvetica, Arial, sans-serif",
+  ubuntu: "Ubuntu, 'Segoe UI', Helvetica, Arial, sans-serif",
+  josefin_sans: "'Josefin Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  libre_baskerville: "'Libre Baskerville', Georgia, 'Times New Roman', serif",
+  libre_franklin: "'Libre Franklin', 'Segoe UI', Helvetica, Arial, sans-serif",
+  mukta: "Mukta, 'Segoe UI', Helvetica, Arial, sans-serif",
+  oxygen: "Oxygen, 'Segoe UI', Helvetica, Arial, sans-serif",
+  exo_2: "'Exo 2', 'Segoe UI', Helvetica, Arial, sans-serif",
+  inconsolata: "Inconsolata, 'Courier New', Courier, monospace",
+  merriweather_sans: "'Merriweather Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  teko: "Teko, 'Arial Narrow', Arial, sans-serif",
+  anton: "Anton, 'Arial Narrow', Arial, sans-serif",
+  archivo: "Archivo, 'Segoe UI', Helvetica, Arial, sans-serif",
+  assistant: "Assistant, 'Segoe UI', Helvetica, Arial, sans-serif",
+  asap: "Asap, 'Segoe UI', Helvetica, Arial, sans-serif",
+  barlow_condensed: "'Barlow Condensed', 'Arial Narrow', Arial, sans-serif",
+  figtree: "Figtree, 'Segoe UI', Helvetica, Arial, sans-serif",
+  public_sans: "'Public Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  red_hat_display: "'Red Hat Display', 'Segoe UI', Helvetica, Arial, sans-serif",
+  red_hat_text: "'Red Hat Text', 'Segoe UI', Helvetica, Arial, sans-serif",
+  sora: "Sora, 'Segoe UI', Helvetica, Arial, sans-serif",
+  plus_jakarta_sans: "'Plus Jakarta Sans', 'Segoe UI', Helvetica, Arial, sans-serif",
+  epilogue: "Epilogue, 'Segoe UI', Helvetica, Arial, sans-serif",
+  lexend: "Lexend, 'Segoe UI', Helvetica, Arial, sans-serif",
+  inter_tight: "'Inter Tight', 'Segoe UI', Helvetica, Arial, sans-serif",
+  fraunces: "Fraunces, Georgia, 'Times New Roman', serif",
+  cormorant_garamond: "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
+  crimson_pro: "'Crimson Pro', Georgia, 'Times New Roman', serif",
+  cabin: "Cabin, 'Segoe UI', Helvetica, Arial, sans-serif",
+  titillium_web: "'Titillium Web', 'Segoe UI', Helvetica, Arial, sans-serif",
+  hind: "Hind, 'Segoe UI', Helvetica, Arial, sans-serif",
+  prompt: "Prompt, 'Segoe UI', Helvetica, Arial, sans-serif",
+  arimo: "Arimo, 'Segoe UI', Helvetica, Arial, sans-serif",
+  heebo: "Heebo, 'Segoe UI', Helvetica, Arial, sans-serif",
+  kanit: "Kanit, 'Segoe UI', Helvetica, Arial, sans-serif",
+  dosis: "Dosis, 'Segoe UI', Helvetica, Arial, sans-serif",
+};
 
 function normalizeHexColor(value: string): string | null {
   const trimmed = value.trim();
@@ -164,6 +237,9 @@ export default function GeneratePage() {
   const [solidColor, setSolidColor] = useState('#4A90E2');
   const [gradientFrom, setGradientFrom] = useState('#4A90E2');
   const [gradientTo, setGradientTo] = useState('#7B68EE');
+  const [fontFamily, setFontFamily] = useState<TemplateFontFamily>('system');
+  const [fontSize, setFontSize] = useState(52);
+  const [fontColor, setFontColor] = useState('#FFFFFF');
   const [frameModesByDevice, setFrameModesByDevice] = useState<FrameModesByDevice>({});
   const [frameAssetFilesByDevice, setFrameAssetFilesByDevice] = useState<
     Partial<Record<DeviceType, string[]>>
@@ -211,6 +287,15 @@ export default function GeneratePage() {
       backgroundImage: `linear-gradient(135deg, ${gradientFrom} 0%, ${gradientTo} 100%)`,
     };
   }, [backgroundMode, solidColor, gradientFrom, gradientTo]);
+
+  const templateTextStyle = useMemo(
+    () => ({
+      font_family: fontFamily,
+      font_size: fontSize,
+      font_color: fontColor,
+    }),
+    [fontFamily, fontSize, fontColor]
+  );
 
   useEffect(() => {
     loadData();
@@ -359,6 +444,7 @@ export default function GeneratePage() {
             screenshot_base64: screenshotBase64,
             style: BACKGROUND_TEMPLATE_STYLE,
             template_background: templateBackground,
+            text_style: templateTextStyle,
             device_type: previewDevice,
             title: defaultCopy.title,
             subtitle: defaultCopy.subtitle || '',
@@ -398,6 +484,7 @@ export default function GeneratePage() {
     copies,
     selectedDevices,
     templateBackground,
+    templateTextStyle,
     frameModesByDevice,
     selectedFrameAssetFilesByDevice,
   ]);
@@ -481,6 +568,24 @@ export default function GeneratePage() {
     setGradientTo(to.toUpperCase());
   };
 
+  const selectFontColor = (value: string) => {
+    const normalized = normalizeHexColor(value);
+    if (normalized) {
+      setFontColor(normalized);
+    }
+  };
+
+  const updateFontSize = (value: number) => {
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    const clamped = Math.max(
+      TEMPLATE_FONT_SIZE_LIMITS.min,
+      Math.min(TEMPLATE_FONT_SIZE_LIMITS.max, Math.round(value))
+    );
+    setFontSize(clamped);
+  };
+
   const startGeneration = async () => {
     setGenerating(true);
     setError(null);
@@ -504,6 +609,7 @@ export default function GeneratePage() {
           locales: selectedLocales,
           template_style: BACKGROUND_TEMPLATE_STYLE,
           template_background: templateBackground,
+          text_style: templateTextStyle,
           frame_mode: 'minimal',
           frame_modes: selectedDeviceFrameModes,
           frame_asset_files:
@@ -820,7 +926,91 @@ export default function GeneratePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>5. Preview (Default English Copy)</CardTitle>
+            <CardTitle>5. Customize Text Style</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="template-font-family">Font</Label>
+                <select
+                  id="template-font-family"
+                  value={fontFamily}
+                  onChange={(event) => setFontFamily(event.target.value as TemplateFontFamily)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {TEMPLATE_FONT_OPTIONS.map((font) => (
+                    <option key={font.value} value={font.value}>
+                      {font.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Google font files are embedded via @fontsource for generated previews and final
+                  screenshots.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="template-font-size">Font size</Label>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="template-font-size"
+                    type="range"
+                    min={TEMPLATE_FONT_SIZE_LIMITS.min}
+                    max={TEMPLATE_FONT_SIZE_LIMITS.max}
+                    value={fontSize}
+                    onChange={(event) => updateFontSize(Number(event.target.value))}
+                    className="h-10 flex-1"
+                  />
+                  <Input
+                    type="number"
+                    min={TEMPLATE_FONT_SIZE_LIMITS.min}
+                    max={TEMPLATE_FONT_SIZE_LIMITS.max}
+                    value={fontSize}
+                    onChange={(event) => updateFontSize(Number(event.target.value))}
+                    className="w-20"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="template-font-color">Font color</Label>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="template-font-color"
+                    type="color"
+                    value={fontColor}
+                    onChange={(event) => selectFontColor(event.target.value)}
+                    className="h-10 w-12 cursor-pointer rounded border border-input bg-background p-1"
+                  />
+                  <Input value={fontColor} readOnly className="font-mono" />
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="rounded-lg border p-4 text-center"
+              style={{
+                fontFamily: FONT_PREVIEW_STACKS[fontFamily],
+                color: fontColor,
+              }}
+            >
+              <p className="font-bold leading-tight" style={{ fontSize: `${fontSize}px` }}>
+                Sample Title
+              </p>
+              <p
+                className="mt-2 opacity-90"
+                style={{ fontSize: `${Math.max(12, Math.round(fontSize * 0.55))}px` }}
+              >
+                Sample subtitle preview
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>6. Preview (Default English Copy)</CardTitle>
           </CardHeader>
           <CardContent>
             {previewImage && (

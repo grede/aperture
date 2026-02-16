@@ -19,6 +19,77 @@ export type TemplateStyle = 'minimal' | 'modern' | 'gradient' | 'dark' | 'playfu
 export type TemplateBackground =
   | { mode: 'solid'; color: string }
   | { mode: 'gradient'; from: string; to: string; angle?: number };
+export type TemplateFontFamily =
+  | 'system'
+  | 'helvetica'
+  | 'georgia'
+  | 'avenir'
+  | 'courier'
+  | 'inter'
+  | 'roboto'
+  | 'open_sans'
+  | 'poppins'
+  | 'montserrat'
+  | 'lato'
+  | 'oswald'
+  | 'raleway'
+  | 'nunito'
+  | 'playfair_display'
+  | 'merriweather'
+  | 'lora'
+  | 'source_sans_3'
+  | 'dm_sans'
+  | 'rubik'
+  | 'manrope'
+  | 'work_sans'
+  | 'fira_sans'
+  | 'pt_sans'
+  | 'karla'
+  | 'jost'
+  | 'barlow'
+  | 'quicksand'
+  | 'bebas_neue'
+  | 'space_grotesk'
+  | 'ubuntu'
+  | 'josefin_sans'
+  | 'libre_baskerville'
+  | 'libre_franklin'
+  | 'mukta'
+  | 'oxygen'
+  | 'exo_2'
+  | 'inconsolata'
+  | 'merriweather_sans'
+  | 'teko'
+  | 'anton'
+  | 'archivo'
+  | 'assistant'
+  | 'asap'
+  | 'barlow_condensed'
+  | 'figtree'
+  | 'public_sans'
+  | 'red_hat_display'
+  | 'red_hat_text'
+  | 'sora'
+  | 'plus_jakarta_sans'
+  | 'epilogue'
+  | 'lexend'
+  | 'inter_tight'
+  | 'fraunces'
+  | 'cormorant_garamond'
+  | 'crimson_pro'
+  | 'cabin'
+  | 'titillium_web'
+  | 'hind'
+  | 'prompt'
+  | 'arimo'
+  | 'heebo'
+  | 'kanit'
+  | 'dosis';
+export interface TemplateTextStyle {
+  font_family?: TemplateFontFamily;
+  font_size?: number;
+  font_color?: string;
+}
 
 /**
  * Frame modes for device rendering
@@ -75,6 +146,7 @@ export interface GenerationConfig {
   locales: string[];
   template_style: TemplateStyle;
   template_background?: TemplateBackground;
+  text_style?: TemplateTextStyle;
   frame_mode: FrameMode;
   frame_modes?: FrameModesByDevice;
   frame_asset_files?: FrameAssetFilesByDevice;
@@ -174,6 +246,7 @@ export interface StartGenerationRequest {
   locales: string[];
   template_style: TemplateStyle;
   template_background?: TemplateBackground;
+  text_style?: TemplateTextStyle;
   frame_mode: FrameMode;
   frame_modes?: FrameModesByDevice;
   frame_asset_files?: FrameAssetFilesByDevice;

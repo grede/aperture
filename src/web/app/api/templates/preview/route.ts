@@ -23,6 +23,13 @@ export async function POST(request: NextRequest) {
 
     // Map device type
     const templateDeviceType = DEVICE_TYPE_TO_TEMPLATE[validated.device_type];
+    const resolvedTextStyle = validated.text_style
+      ? {
+          fontFamily: validated.text_style.font_family,
+          fontSize: validated.text_style.font_size,
+          fontColor: validated.text_style.font_color,
+        }
+      : undefined;
 
     // Generate preview
     const templateService = getTemplateService();
@@ -30,6 +37,7 @@ export async function POST(request: NextRequest) {
       screenshotBuffer,
       validated.style,
       validated.template_background,
+      resolvedTextStyle,
       templateDeviceType,
       validated.title,
       validated.subtitle || '',
@@ -44,6 +52,7 @@ export async function POST(request: NextRequest) {
       image_base64: previewBase64,
       style: validated.style,
       template_background: validated.template_background,
+      text_style: validated.text_style,
       frame_mode: validated.frame_mode,
       frame_asset_file: validated.frame_asset_file,
     });

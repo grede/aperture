@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { SUPPORTED_LOCALES } from './constants';
+import { SUPPORTED_LOCALES, TEMPLATE_FONT_OPTIONS, TEMPLATE_FONT_SIZE_LIMITS } from './constants';
 
 /**
  * Device type schema
@@ -17,6 +17,25 @@ export const templateStyleSchema = z.enum(['minimal', 'modern', 'gradient', 'dar
 export const hexColorSchema = z
   .string()
   .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Color must be a valid hex value');
+const templateFontFamilyValues = TEMPLATE_FONT_OPTIONS.map((font) => font.value);
+const templateFontFamilySchema = z.enum(
+  templateFontFamilyValues as [
+    (typeof templateFontFamilyValues)[number],
+    ...(typeof templateFontFamilyValues)[number][],
+  ]
+);
+export const templateTextStyleSchema = z
+  .object({
+    font_family: templateFontFamilySchema.optional(),
+    font_size: z
+      .number()
+      .int()
+      .min(TEMPLATE_FONT_SIZE_LIMITS.min)
+      .max(TEMPLATE_FONT_SIZE_LIMITS.max)
+      .optional(),
+    font_color: hexColorSchema.optional(),
+  })
+  .strict();
 export const templateBackgroundSchema = z.discriminatedUnion('mode', [
   z.object({
     mode: z.literal('solid'),
@@ -88,8 +107,8 @@ export const updateAppSchema = z
  */
 export const createScreenSchema = z.object({
   deviceType: deviceTypeSchema,
-  title: z.string().min(1, 'Title is required').max(30, 'Title must be less than 30 characters'),
-  subtitle: z.string().max(80, 'Subtitle must be less than 80 characters').optional(),
+  title: z.string().min(1, 'Title is required'),
+  subtitle: z.string().optional(),
 });
 
 /**
@@ -106,8 +125,8 @@ export const updateScreenSchema = z.object({
 export const copyUpdateSchema = z.object({
   screen_id: z.number().int().positive(),
   locale: localeSchema,
-  title: z.string().min(1).max(30),
-  subtitle: z.string().max(80).optional().nullable(),
+  title: z.string().min(1),
+  subtitle: z.string().optional().nullable(),
 });
 
 /**
@@ -150,6 +169,7 @@ export const startGenerationSchema = z.object({
     }),
   template_style: templateStyleSchema,
   template_background: templateBackgroundSchema.optional(),
+  text_style: templateTextStyleSchema.optional(),
   frame_mode: frameModeSchema,
   frame_modes: frameModesByDeviceSchema.optional(),
   frame_asset_files: frameAssetFilesByDeviceSchema.optional(),
@@ -162,9 +182,10 @@ export const templatePreviewSchema = z.object({
   screenshot_base64: z.string().min(1, 'Screenshot is required'),
   style: templateStyleSchema,
   template_background: templateBackgroundSchema.optional(),
+  text_style: templateTextStyleSchema.optional(),
   device_type: deviceTypeSchema,
-  title: z.string().min(1).max(30),
-  subtitle: z.string().max(80).optional(),
+  title: z.string().min(1),
+  subtitle: z.string().optional(),
   frame_mode: frameModeSchema.optional().default('minimal'),
   frame_asset_file: z.string().min(1).optional(),
 });

@@ -2,7 +2,7 @@
  * Constants for device types, locales, templates, and other configuration
  */
 
-import type { DeviceType, TemplateStyle, FrameMode } from '../types';
+import type { DeviceType, TemplateStyle, FrameMode, TemplateFontFamily } from '../types';
 import type { TemplateDeviceType } from '../../types';
 
 /**
@@ -65,6 +65,85 @@ export const TEMPLATE_STYLE_INFO: Record<TemplateStyle, { name: string; descript
     name: 'Playful',
     description: 'Colorful shapes, rotated device, fun fonts',
   },
+};
+
+/**
+ * Template text font options
+ */
+export const TEMPLATE_FONT_OPTIONS: Array<{ value: TemplateFontFamily; label: string }> = [
+  { value: 'system', label: 'System UI' },
+  { value: 'helvetica', label: 'Helvetica' },
+  { value: 'georgia', label: 'Georgia' },
+  { value: 'avenir', label: 'Avenir' },
+  { value: 'courier', label: 'Courier New' },
+  { value: 'inter', label: 'Inter' },
+  { value: 'roboto', label: 'Roboto' },
+  { value: 'open_sans', label: 'Open Sans' },
+  { value: 'poppins', label: 'Poppins' },
+  { value: 'montserrat', label: 'Montserrat' },
+  { value: 'lato', label: 'Lato' },
+  { value: 'oswald', label: 'Oswald' },
+  { value: 'raleway', label: 'Raleway' },
+  { value: 'nunito', label: 'Nunito' },
+  { value: 'playfair_display', label: 'Playfair Display' },
+  { value: 'merriweather', label: 'Merriweather' },
+  { value: 'lora', label: 'Lora' },
+  { value: 'source_sans_3', label: 'Source Sans 3' },
+  { value: 'dm_sans', label: 'DM Sans' },
+  { value: 'rubik', label: 'Rubik' },
+  { value: 'manrope', label: 'Manrope' },
+  { value: 'work_sans', label: 'Work Sans' },
+  { value: 'fira_sans', label: 'Fira Sans' },
+  { value: 'pt_sans', label: 'PT Sans' },
+  { value: 'karla', label: 'Karla' },
+  { value: 'jost', label: 'Jost' },
+  { value: 'barlow', label: 'Barlow' },
+  { value: 'quicksand', label: 'Quicksand' },
+  { value: 'bebas_neue', label: 'Bebas Neue' },
+  { value: 'space_grotesk', label: 'Space Grotesk' },
+  { value: 'ubuntu', label: 'Ubuntu' },
+  { value: 'josefin_sans', label: 'Josefin Sans' },
+  { value: 'libre_baskerville', label: 'Libre Baskerville' },
+  { value: 'libre_franklin', label: 'Libre Franklin' },
+  { value: 'mukta', label: 'Mukta' },
+  { value: 'oxygen', label: 'Oxygen' },
+  { value: 'exo_2', label: 'Exo 2' },
+  { value: 'inconsolata', label: 'Inconsolata' },
+  { value: 'merriweather_sans', label: 'Merriweather Sans' },
+  { value: 'teko', label: 'Teko' },
+  { value: 'anton', label: 'Anton' },
+  { value: 'archivo', label: 'Archivo' },
+  { value: 'assistant', label: 'Assistant' },
+  { value: 'asap', label: 'Asap' },
+  { value: 'barlow_condensed', label: 'Barlow Condensed' },
+  { value: 'figtree', label: 'Figtree' },
+  { value: 'public_sans', label: 'Public Sans' },
+  { value: 'red_hat_display', label: 'Red Hat Display' },
+  { value: 'red_hat_text', label: 'Red Hat Text' },
+  { value: 'sora', label: 'Sora' },
+  { value: 'plus_jakarta_sans', label: 'Plus Jakarta Sans' },
+  { value: 'epilogue', label: 'Epilogue' },
+  { value: 'lexend', label: 'Lexend' },
+  { value: 'inter_tight', label: 'Inter Tight' },
+  { value: 'fraunces', label: 'Fraunces' },
+  { value: 'cormorant_garamond', label: 'Cormorant Garamond' },
+  { value: 'crimson_pro', label: 'Crimson Pro' },
+  { value: 'cabin', label: 'Cabin' },
+  { value: 'titillium_web', label: 'Titillium Web' },
+  { value: 'hind', label: 'Hind' },
+  { value: 'prompt', label: 'Prompt' },
+  { value: 'arimo', label: 'Arimo' },
+  { value: 'heebo', label: 'Heebo' },
+  { value: 'kanit', label: 'Kanit' },
+  { value: 'dosis', label: 'Dosis' },
+];
+
+/**
+ * Template text size limits (pixels)
+ */
+export const TEMPLATE_FONT_SIZE_LIMITS = {
+  min: 24,
+  max: 80,
 };
 
 /**
@@ -155,8 +234,6 @@ export const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'ima
  * App Store screenshot character limits
  */
 export const CHARACTER_LIMITS = {
-  title: 30,
-  subtitle: 80,
   appName: 100,
   appDescription: 500,
 };

@@ -289,20 +289,18 @@ export default function CopiesPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Title (max 30 chars)</Label>
+                <Label>Title</Label>
                 <Input
                   value={drafts[screen.id]?.title || ''}
-                  maxLength={30}
                   onChange={(event) =>
                     updateDraft(screen.id, { title: event.target.value })
                   }
                 />
               </div>
               <div className="space-y-2">
-                <Label>Subtitle (max 80 chars, optional)</Label>
+                <Label>Subtitle (optional)</Label>
                 <Input
                   value={drafts[screen.id]?.subtitle || ''}
-                  maxLength={80}
                   onChange={(event) =>
                     updateDraft(screen.id, { subtitle: event.target.value })
                   }

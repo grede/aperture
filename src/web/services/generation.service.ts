@@ -42,6 +42,7 @@ export class GenerationService {
         locales,
         template_style,
         template_background,
+        text_style,
         frame_mode,
         frame_modes,
         frame_asset_files,
@@ -101,6 +102,13 @@ export class GenerationService {
               screenshotBuffer,
               template_style,
               template_background,
+              text_style
+                ? {
+                    fontFamily: text_style.font_family,
+                    fontSize: text_style.font_size,
+                    fontColor: text_style.font_color,
+                  }
+                : undefined,
               templateDeviceType,
               copy.title,
               copy.subtitle || '',

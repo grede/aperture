@@ -143,16 +143,17 @@ export default function GenerationsListPage() {
                 )}
 
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    asChild
-                    disabled={generation.status !== 'completed'}
-                  >
+                  {generation.status === 'completed' ? (
                     <Link href={`/apps/${appId}/generations/${generation.id}`}>
-                      View Details
+                      <Button variant="outline" size="sm">
+                        View Details
+                      </Button>
                     </Link>
-                  </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" disabled>
+                      View Details
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>

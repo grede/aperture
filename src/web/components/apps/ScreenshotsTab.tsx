@@ -16,11 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import {
-  CHARACTER_LIMITS,
-  DEVICE_TYPES,
-  DEVICE_TYPE_LABELS,
-} from '@/lib/constants';
+import { DEVICE_TYPES, DEVICE_TYPE_LABELS } from '@/lib/constants';
 import type { AppWithScreens, DeviceType, Generation } from '@/types';
 
 export default function AppDetailsPage() {
@@ -222,7 +218,6 @@ export default function AppDetailsPage() {
             <Input
               value={uploadTitle}
               onChange={(event) => setUploadTitle(event.target.value)}
-              maxLength={CHARACTER_LIMITS.title}
               placeholder="Powerful editing in one tap"
             />
           </div>
@@ -232,7 +227,6 @@ export default function AppDetailsPage() {
             <Input
               value={uploadSubtitle}
               onChange={(event) => setUploadSubtitle(event.target.value)}
-              maxLength={CHARACTER_LIMITS.subtitle}
               placeholder="Create polished visuals in seconds"
             />
           </div>

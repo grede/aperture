@@ -66,12 +66,6 @@ export default function NewAppPage() {
   const validateScreen = (screen: ScreenDraft): string | null => {
     if (!screen.file) return 'Each screen must include a screenshot file';
     if (!screen.title.trim()) return 'Each screen must include an English title';
-    if (screen.title.length > CHARACTER_LIMITS.title) {
-      return `Screen title must be at most ${CHARACTER_LIMITS.title} characters`;
-    }
-    if (screen.subtitle.length > CHARACTER_LIMITS.subtitle) {
-      return `Screen subtitle must be at most ${CHARACTER_LIMITS.subtitle} characters`;
-    }
     return null;
   };
 
@@ -255,7 +249,6 @@ export default function NewAppPage() {
                       onChange={(event) =>
                         updateScreen(screen.id, { title: event.target.value })
                       }
-                      maxLength={CHARACTER_LIMITS.title}
                       placeholder="Powerful editing in one tap"
                       required
                     />
@@ -268,7 +261,6 @@ export default function NewAppPage() {
                       onChange={(event) =>
                         updateScreen(screen.id, { subtitle: event.target.value })
                       }
-                      maxLength={CHARACTER_LIMITS.subtitle}
                       placeholder="Design pro visuals in seconds"
                     />
                   </div>
