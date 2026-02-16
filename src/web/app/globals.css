@@ -4,34 +4,34 @@
 
 @layer base {
   :root {
-    /* Force dark mode - dark-only slate palette with indigo accent */
-    --background: 215 20% 7%;         /* slate-950 darker */
-    --foreground: 210 40% 98%;        /* slate-50 */
+    /* Light mode - clean white/gray palette with indigo accent */
+    --background: 0 0% 100%;              /* white */
+    --foreground: 222.2 47.4% 11.2%;      /* slate-900 dark text */
 
-    --card: 215 25% 10%;              /* slate-900 with slight warmth */
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 100%;                    /* white cards */
+    --card-foreground: 222.2 47.4% 11.2%;
 
-    --popover: 215 25% 10%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47.4% 11.2%;
 
-    --primary: 238 83.5% 66.7%;       /* indigo-500 */
-    --primary-foreground: 210 40% 98%;
+    --primary: 238 83.5% 66.7%;           /* indigo-500 */
+    --primary-foreground: 210 40% 98%;    /* white text on indigo */
 
-    --secondary: 215 19% 16.5%;       /* slate-800 */
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;           /* slate-100 light gray */
+    --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 215 19% 16.5%;           /* slate-800 */
-    --muted-foreground: 215 16.3% 56.9%;  /* slate-400 */
+    --muted: 210 40% 96.1%;               /* slate-100 */
+    --muted-foreground: 215.4 16.3% 46.9%; /* slate-500 muted text */
 
-    --accent: 215 19% 16.5%;          /* slate-800 */
-    --accent-foreground: 210 40% 98%;
+    --accent: 210 40% 96.1%;              /* slate-100 */
+    --accent-foreground: 222.2 47.4% 11.2%;
 
-    --destructive: 0 62.8% 50.6%;     /* red-600 darker */
+    --destructive: 0 84.2% 60.2%;         /* red-500 */
     --destructive-foreground: 210 40% 98%;
 
-    --border: 215 20% 20%;            /* slate-800 subtle */
-    --input: 215 20% 20%;
-    --ring: 238 83.5% 66.7%;          /* indigo-500 */
+    --border: 214.3 31.8% 91.4%;          /* slate-200 subtle borders */
+    --input: 214.3 31.8% 91.4%;
+    --ring: 238 83.5% 66.7%;              /* indigo-500 focus ring */
 
     --radius: 0.5rem;                 /* 8px - slightly sharper than default */
   }

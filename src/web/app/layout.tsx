@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
-import { Sidebar } from '@/components/layout/Sidebar';
+import { Header } from '@/components/layout/Header';
+import { AppTabsProvider } from '@/components/layout/AppTabsContext';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -14,16 +15,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body className={`${GeistSans.className} antialiased`}>
-        <div className="flex h-screen overflow-hidden">
-          <Sidebar />
-          <main className="flex-1 overflow-y-auto md:pl-60">
-            <div className="container mx-auto px-6 py-8 max-w-7xl">
-              {children}
-            </div>
-          </main>
-        </div>
+        <AppTabsProvider>
+          <div className="flex flex-col h-screen">
+            <Header />
+            <main className="flex-1 overflow-y-auto">
+              <div className="container mx-auto px-6 py-8 max-w-7xl">
+                {children}
+              </div>
+            </main>
+          </div>
+        </AppTabsProvider>
       </body>
     </html>
   );
