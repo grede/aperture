@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -8,6 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   DEVICE_TYPE_LABELS,
   SUPPORTED_LOCALES,
@@ -237,6 +244,9 @@ export default function GeneratePage() {
   const [solidColor, setSolidColor] = useState('#4A90E2');
   const [gradientFrom, setGradientFrom] = useState('#4A90E2');
   const [gradientTo, setGradientTo] = useState('#7B68EE');
+  const [backgroundImagePath, setBackgroundImagePath] = useState<string | null>(null);
+  const [backgroundImageUploading, setBackgroundImageUploading] = useState(false);
+  const [backgroundImageError, setBackgroundImageError] = useState<string | null>(null);
   const [fontFamily, setFontFamily] = useState<TemplateFontFamily>('system');
   const [fontSize, setFontSize] = useState(52);
   const [fontColor, setFontColor] = useState('#FFFFFF');
@@ -265,11 +275,22 @@ export default function GeneratePage() {
   }, [app]);
 
   const availableLocales = useMemo(() => collectSavedLocales(copies), [copies]);
-  const templateBackground = useMemo<TemplateBackground>(() => {
+  const templateBackground = useMemo<TemplateBackground | undefined>(() => {
     if (backgroundMode === 'solid') {
       return {
         mode: 'solid',
         color: solidColor,
+      };
+    }
+
+    if (backgroundMode === 'image') {
+      if (!backgroundImagePath) {
+        return undefined;
+      }
+
+      return {
+        mode: 'image',
+        image_path: backgroundImagePath,
       };
     }
 
@@ -279,16 +300,26 @@ export default function GeneratePage() {
       to: gradientTo,
       angle: 135,
     };
-  }, [backgroundMode, solidColor, gradientFrom, gradientTo]);
+  }, [backgroundMode, solidColor, gradientFrom, gradientTo, backgroundImagePath]);
 
   const backgroundPreviewStyle = useMemo(() => {
     if (backgroundMode === 'solid') {
       return { backgroundColor: solidColor };
     }
+    if (backgroundMode === 'image') {
+      if (!backgroundImagePath) {
+        return undefined;
+      }
+      return {
+        backgroundImage: `url(/api/uploads/${backgroundImagePath})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      };
+    }
     return {
       backgroundImage: `linear-gradient(135deg, ${gradientFrom} 0%, ${gradientTo} 100%)`,
     };
-  }, [backgroundMode, solidColor, gradientFrom, gradientTo]);
+  }, [backgroundMode, solidColor, gradientFrom, gradientTo, backgroundImagePath]);
 
   const templateTextStyle = useMemo(
     () => ({
@@ -297,6 +328,10 @@ export default function GeneratePage() {
       font_color: fontColor,
     }),
     [fontFamily, fontSize, fontColor]
+  );
+  const selectedFontLabel = useMemo(
+    () => TEMPLATE_FONT_OPTIONS.find((font) => font.value === fontFamily)?.label || 'System UI',
+    [fontFamily]
   );
 
   useEffect(() => {
@@ -421,6 +456,13 @@ export default function GeneratePage() {
         return;
       }
 
+      if (backgroundMode === 'image' && !templateBackground) {
+        setPreviewError('Upload a background image to render preview.');
+        setPreviewImage(null);
+        setPreviewLoading(false);
+        return;
+      }
+
       const requestId = ++previewRequestIdRef.current;
       setPreviewLoading(true);
       setPreviewError(null);
@@ -485,6 +527,7 @@ export default function GeneratePage() {
     app,
     copies,
     selectedDevices,
+    backgroundMode,
     templateBackground,
     templateTextStyle,
     frameModesByDevice,
@@ -544,6 +587,12 @@ export default function GeneratePage() {
     setSelectedFrameAssetFilesByDevice((prev) => ({ ...prev, [deviceType]: frameAssetFile }));
   };
 
+  const setTemplateBackgroundMode = (mode: TemplateBackground['mode']) => {
+    setBackgroundMode(mode);
+    setError(null);
+    setBackgroundImageError(null);
+  };
+
   const selectSolidColor = (value: string) => {
     const normalized = normalizeHexColor(value);
     if (normalized) {
@@ -570,6 +619,51 @@ export default function GeneratePage() {
     setGradientSuggestionError(null);
     setGradientFrom(from.toUpperCase());
     setGradientTo(to.toUpperCase());
+  };
+
+  const uploadBackgroundImage = async (file: File) => {
+    setBackgroundImageUploading(true);
+    setBackgroundImageError(null);
+
+    try {
+      const formData = new FormData();
+      formData.set('file', file);
+
+      const response = await fetch(`/api/apps/${appId}/template-background`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to upload background image');
+      }
+
+      const payload = await response.json();
+      const imagePath = payload?.data?.image_path;
+      if (typeof imagePath !== 'string' || imagePath.length === 0) {
+        throw new Error('Upload succeeded but no image path was returned');
+      }
+
+      setBackgroundImagePath(imagePath);
+      setTemplateBackgroundMode('image');
+    } catch (uploadError) {
+      setBackgroundImageError(
+        uploadError instanceof Error ? uploadError.message : 'Failed to upload background image'
+      );
+    } finally {
+      setBackgroundImageUploading(false);
+    }
+  };
+
+  const handleBackgroundImageSelection = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    await uploadBackgroundImage(file);
+    event.target.value = '';
   };
 
   const suggestGradientWithAi = async () => {
@@ -655,6 +749,11 @@ export default function GeneratePage() {
   };
 
   const startGeneration = async () => {
+    if (backgroundMode === 'image' && !templateBackground) {
+      setError('Upload a background image before starting generation.');
+      return;
+    }
+
     setGenerating(true);
     setError(null);
 
@@ -875,24 +974,31 @@ export default function GeneratePage() {
             <CardTitle>4. Choose Template Background</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid max-w-sm grid-cols-2 gap-2">
+            <div className="grid max-w-lg grid-cols-3 gap-2">
               <Button
                 type="button"
                 variant={backgroundMode === 'solid' ? 'default' : 'outline'}
-                onClick={() => setBackgroundMode('solid')}
+                onClick={() => setTemplateBackgroundMode('solid')}
               >
                 Single Color
               </Button>
               <Button
                 type="button"
                 variant={backgroundMode === 'gradient' ? 'default' : 'outline'}
-                onClick={() => setBackgroundMode('gradient')}
+                onClick={() => setTemplateBackgroundMode('gradient')}
               >
                 Gradient
               </Button>
+              <Button
+                type="button"
+                variant={backgroundMode === 'image' ? 'default' : 'outline'}
+                onClick={() => setTemplateBackgroundMode('image')}
+              >
+                Image
+              </Button>
             </div>
 
-            {backgroundMode === 'gradient' && (
+            {backgroundPreviewStyle && (
               <div className="rounded-xl border p-3">
                 <div className="h-28 rounded-lg border" style={backgroundPreviewStyle} />
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -931,7 +1037,7 @@ export default function GeneratePage() {
                   ))}
                 </div>
               </div>
-            ) : (
+            ) : backgroundMode === 'gradient' ? (
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
@@ -1006,6 +1112,32 @@ export default function GeneratePage() {
                   })}
                 </div>
               </div>
+            ) : (
+              <div className="space-y-3">
+                <Label htmlFor="template-background-image">Upload image</Label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    id="template-background-image"
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    onChange={handleBackgroundImageSelection}
+                    className="block w-full max-w-sm text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-2 file:text-sm file:font-medium"
+                  />
+                  {backgroundImageUploading && (
+                    <p className="text-xs text-muted-foreground">Uploading image...</p>
+                  )}
+                </div>
+                {backgroundImagePath && (
+                  <p className="text-xs text-muted-foreground">
+                    Uploaded: <code>{backgroundImagePath.split('/').pop()}</code>
+                  </p>
+                )}
+                {backgroundImageError && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {backgroundImageError}
+                  </p>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -1018,18 +1150,47 @@ export default function GeneratePage() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="template-font-family">Font</Label>
-                <select
-                  id="template-font-family"
-                  value={fontFamily}
-                  onChange={(event) => setFontFamily(event.target.value as TemplateFontFamily)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  {TEMPLATE_FONT_OPTIONS.map((font) => (
-                    <option key={font.value} value={font.value}>
-                      {font.label}
-                    </option>
-                  ))}
-                </select>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      id="template-font-family"
+                      type="button"
+                      variant="outline"
+                      className="h-10 w-full justify-start text-left"
+                    >
+                      <p
+                        className="truncate text-sm font-medium"
+                        style={{ fontFamily: FONT_PREVIEW_STACKS[fontFamily] }}
+                      >
+                        {selectedFontLabel}
+                      </p>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    className="w-[340px] max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto p-1"
+                    align="start"
+                  >
+                    <DropdownMenuRadioGroup
+                      value={fontFamily}
+                      onValueChange={(value) => setFontFamily(value as TemplateFontFamily)}
+                    >
+                      {TEMPLATE_FONT_OPTIONS.map((font) => (
+                        <DropdownMenuRadioItem
+                          key={font.value}
+                          value={font.value}
+                          className="cursor-pointer py-2"
+                        >
+                          <p
+                            className="truncate text-sm font-medium"
+                            style={{ fontFamily: FONT_PREVIEW_STACKS[font.value] }}
+                          >
+                            {font.label}
+                          </p>
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <p className="text-xs text-muted-foreground">
                   Google font files are embedded via @fontsource for generated previews and final
                   screenshots.
@@ -1135,7 +1296,11 @@ export default function GeneratePage() {
                 size="lg"
                 onClick={startGeneration}
                 disabled={
-                  generating || selectedDevices.length === 0 || selectedLocales.length === 0
+                  generating ||
+                  selectedDevices.length === 0 ||
+                  selectedLocales.length === 0 ||
+                  backgroundImageUploading ||
+                  (backgroundMode === 'image' && !templateBackground)
                 }
                 className="w-full max-w-md"
               >

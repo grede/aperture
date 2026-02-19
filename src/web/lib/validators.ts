@@ -47,6 +47,10 @@ export const templateBackgroundSchema = z.discriminatedUnion('mode', [
     to: hexColorSchema,
     angle: z.number().min(0).max(360).optional(),
   }),
+  z.object({
+    mode: z.literal('image'),
+    image_path: z.string().min(1),
+  }),
 ]);
 
 /**

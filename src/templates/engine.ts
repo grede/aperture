@@ -369,7 +369,8 @@ export class TemplateEngine {
       background = await this.createBackgroundFromSelection(
         dimensions.width,
         dimensions.height,
-        options.background
+        options.background,
+        options.backgroundImage
       );
     } else if (options.style === 'modern' || options.style === 'gradient') {
       // Create default gradient background
@@ -765,7 +766,8 @@ export class TemplateEngine {
   private async createBackgroundFromSelection(
     width: number,
     height: number,
-    background: TemplateBackground
+    background: TemplateBackground,
+    backgroundImage?: Buffer
   ): Promise<sharp.Sharp> {
     if (background.mode === 'solid') {
       return sharp({
@@ -776,6 +778,21 @@ export class TemplateEngine {
           background: background.color,
         },
       });
+    }
+
+    if (background.mode === 'image') {
+      if (!backgroundImage) {
+        throw new Error('Background image data is required for image mode');
+      }
+
+      const renderedImage = await sharp(backgroundImage)
+        .resize(width, height, {
+          fit: 'cover',
+          position: 'centre',
+        })
+        .toBuffer();
+
+      return sharp(renderedImage);
     }
 
     return sharp(
@@ -952,6 +969,10 @@ export class TemplateEngine {
     if (background.mode === 'solid') {
       const rgb = this.parseHexColor(background.color);
       return this.isLightColor(rgb) ? '#111111' : '#FFFFFF';
+    }
+
+    if (background.mode === 'image') {
+      return '#FFFFFF';
     }
 
     const start = this.parseHexColor(background.from);

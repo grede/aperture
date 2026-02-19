@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server';
 import { getTemplateService } from '@/services/template.service';
 import { DEVICE_TYPE_TO_TEMPLATE } from '@/lib/constants';
 import { templatePreviewSchema } from '@/lib/validators';
+import { readTemplateBackground } from '@/lib/storage';
 import { successResponse, handleApiError, parseBody } from '@/lib/api-helpers';
 
 /**
@@ -30,6 +31,10 @@ export async function POST(request: NextRequest) {
           fontColor: validated.text_style.font_color,
         }
       : undefined;
+    const templateBackgroundImage =
+      validated.template_background?.mode === 'image'
+        ? await readTemplateBackground(validated.template_background.image_path)
+        : undefined;
 
     // Generate preview
     const templateService = getTemplateService();
@@ -37,6 +42,7 @@ export async function POST(request: NextRequest) {
       screenshotBuffer,
       validated.style,
       validated.template_background,
+      templateBackgroundImage,
       resolvedTextStyle,
       templateDeviceType,
       validated.title,

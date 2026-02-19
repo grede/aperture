@@ -14,6 +14,7 @@ ensureWebEnvLoaded();
  */
 const UPLOADS_DIR = process.env.UPLOADS_DIR || './aperture-data/uploads';
 const GENERATIONS_DIR = process.env.GENERATIONS_DIR || './aperture-data/generations';
+const TEMPLATE_BACKGROUNDS_PREFIX = 'template-backgrounds';
 
 /**
  * Ensure a directory exists
@@ -53,6 +54,38 @@ export async function saveUpload(
 
   // Return relative path
   return `${appId}/${filename}`;
+}
+
+/**
+ * Save a user-uploaded template background image
+ * @param appId - App ID
+ * @param buffer - PNG image buffer
+ * @returns Relative path to saved file (within uploads)
+ */
+export async function saveTemplateBackground(appId: number, buffer: Buffer): Promise<string> {
+  const dir = join(
+    process.cwd(),
+    UPLOADS_DIR,
+    TEMPLATE_BACKGROUNDS_PREFIX,
+    appId.toString()
+  );
+  await ensureDir(dir);
+
+  const filename = `${Date.now()}.png`;
+  const filePath = join(dir, filename);
+  await writeFile(filePath, buffer);
+
+  return `${TEMPLATE_BACKGROUNDS_PREFIX}/${appId}/${filename}`;
+}
+
+/**
+ * Read a template background image from uploads
+ * @param relativePath - Relative path from uploads directory
+ * @returns Image buffer
+ */
+export async function readTemplateBackground(relativePath: string): Promise<Buffer> {
+  const filePath = join(process.cwd(), UPLOADS_DIR, relativePath);
+  return readFile(filePath);
 }
 
 /**

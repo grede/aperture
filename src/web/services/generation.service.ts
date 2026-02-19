@@ -12,7 +12,7 @@ import {
   createGeneratedScreenshot,
   getAppById,
 } from '../lib/db';
-import { readUpload, saveGeneration } from '../lib/storage';
+import { readTemplateBackground, readUpload, saveGeneration } from '../lib/storage';
 import { DEVICE_TYPE_TO_TEMPLATE } from '../lib/constants';
 
 /**
@@ -47,6 +47,10 @@ export class GenerationService {
         frame_modes,
         frame_asset_files,
       } = config;
+      const templateBackgroundImage =
+        template_background?.mode === 'image'
+          ? await readTemplateBackground(template_background.image_path)
+          : undefined;
 
       // Fetch app for validation
       const app = getAppById(app_id);
@@ -102,6 +106,7 @@ export class GenerationService {
               screenshotBuffer,
               template_style,
               template_background,
+              templateBackgroundImage,
               text_style
                 ? {
                     fontFamily: text_style.font_family,

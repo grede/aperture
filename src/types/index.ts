@@ -87,7 +87,8 @@ export type TemplateFrameMode = 'none' | 'minimal' | 'realistic';
 export type TemplateDeviceType = 'iPhone' | 'iPad' | 'Android';
 export type TemplateBackground =
   | { mode: 'solid'; color: string }
-  | { mode: 'gradient'; from: string; to: string; angle?: number };
+  | { mode: 'gradient'; from: string; to: string; angle?: number }
+  | { mode: 'image'; image_path: string };
 export type TemplateFontFamily =
   | 'system'
   | 'helvetica'
@@ -164,6 +165,7 @@ export interface CompositeOptions {
   screenshot: Buffer;
   style: TemplateStyle;
   background?: TemplateBackground;
+  backgroundImage?: Buffer;
   textStyle?: TemplateTextStyle;
   deviceType: TemplateDeviceType;
   title: string;
