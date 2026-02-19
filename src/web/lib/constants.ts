@@ -145,6 +145,10 @@ export const TEMPLATE_FONT_SIZE_LIMITS = {
   min: 24,
   max: 80,
 };
+export const TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS = {
+  min: 12,
+  max: 56,
+};
 
 /**
  * Frame modes available
@@ -181,12 +185,9 @@ export const SUPPORTED_LOCALES: Array<{ code: string; name: string }> = [
   { code: 'en-AU', name: 'English (Australia)' },
   { code: 'en-CA', name: 'English (Canada)' },
   { code: 'de', name: 'German' },
-  { code: 'de-DE', name: 'German (Germany)' },
   { code: 'es', name: 'Spanish' },
-  { code: 'es-ES', name: 'Spanish (Spain)' },
   { code: 'es-MX', name: 'Spanish (Mexico)' },
   { code: 'fr', name: 'French' },
-  { code: 'fr-FR', name: 'French (France)' },
   { code: 'fr-CA', name: 'French (Canada)' },
   { code: 'it', name: 'Italian' },
   { code: 'ja', name: 'Japanese' },
@@ -195,12 +196,10 @@ export const SUPPORTED_LOCALES: Array<{ code: string; name: string }> = [
   { code: 'pt-PT', name: 'Portuguese (Portugal)' },
   { code: 'zh-Hans', name: 'Chinese (Simplified)' },
   { code: 'zh-Hant', name: 'Chinese (Traditional)' },
-  { code: 'zh-CN', name: 'Chinese (China)' },
-  { code: 'zh-TW', name: 'Chinese (Taiwan)' },
   { code: 'zh-HK', name: 'Chinese (Hong Kong)' },
   { code: 'ru', name: 'Russian' },
+  { code: 'uk', name: 'Ukrainian' },
   { code: 'nl', name: 'Dutch' },
-  { code: 'nl-NL', name: 'Dutch (Netherlands)' },
   { code: 'sv', name: 'Swedish' },
   { code: 'da', name: 'Danish' },
   { code: 'fi', name: 'Finnish' },

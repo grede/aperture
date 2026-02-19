@@ -193,6 +193,19 @@ export function deleteCopy(screenId: number, locale: string): boolean {
   return result.changes > 0;
 }
 
+export function deleteCopiesByAppLocale(appId: number, locale: string): number {
+  const db = getDb();
+  const stmt = db.prepare(`
+    DELETE FROM copies
+    WHERE locale = ?
+      AND screen_id IN (
+        SELECT id FROM screens WHERE app_id = ?
+      )
+  `);
+  const result = stmt.run(locale, appId);
+  return result.changes;
+}
+
 export function createGeneration(appId: number, config: GenerationConfig): Generation {
   const db = getDb();
   const stmt = db.prepare('INSERT INTO generations (app_id, config, status, progress) VALUES (?, ?, ?, ?)');

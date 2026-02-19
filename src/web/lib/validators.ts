@@ -3,7 +3,12 @@
  */
 
 import { z } from 'zod';
-import { SUPPORTED_LOCALES, TEMPLATE_FONT_OPTIONS, TEMPLATE_FONT_SIZE_LIMITS } from './constants';
+import {
+  SUPPORTED_LOCALES,
+  TEMPLATE_FONT_OPTIONS,
+  TEMPLATE_FONT_SIZE_LIMITS,
+  TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS,
+} from './constants';
 
 /**
  * Device type schema
@@ -32,6 +37,12 @@ export const templateTextStyleSchema = z
       .int()
       .min(TEMPLATE_FONT_SIZE_LIMITS.min)
       .max(TEMPLATE_FONT_SIZE_LIMITS.max)
+      .optional(),
+    subtitle_size: z
+      .number()
+      .int()
+      .min(TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.min)
+      .max(TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.max)
       .optional(),
     font_color: hexColorSchema.optional(),
   })
@@ -138,6 +149,13 @@ export const copyUpdateSchema = z.object({
  */
 export const batchUpdateCopiesSchema = z.object({
   updates: z.array(copyUpdateSchema).min(1, 'At least one update is required'),
+});
+
+/**
+ * Delete locale copies request schema
+ */
+export const deleteLocaleCopiesSchema = z.object({
+  locale: localeSchema,
 });
 
 /**

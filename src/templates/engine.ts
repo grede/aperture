@@ -857,9 +857,11 @@ export class TemplateEngine {
     const resolvedTitleSize = textStyle?.fontSize
       ? Math.max(16, Math.round(textStyle.fontSize))
       : style.titleSize;
-    const resolvedSubtitleSize = textStyle?.fontSize
-      ? Math.max(12, Math.round(textStyle.fontSize * 0.55))
-      : style.subtitleSize;
+    const resolvedSubtitleSize = textStyle?.subtitleFontSize
+      ? Math.max(12, Math.round(textStyle.subtitleFontSize))
+      : textStyle?.fontSize
+        ? Math.max(12, Math.round(textStyle.fontSize * 0.55))
+        : style.subtitleSize;
     const fontFamilyKey = textStyle?.fontFamily ?? 'system';
 
     return {

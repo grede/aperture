@@ -1,31 +1,47 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
+import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import type { GenerationWithScreenshots } from '@/types';
+import { SUPPORTED_LOCALES } from '@/lib/constants';
+import type { AppWithScreens, GenerationWithScreenshots, GeneratedScreenshot } from '@/types';
+
+function localeLabel(code: string): string {
+  return SUPPORTED_LOCALES.find((locale) => locale.code === code)?.name || code;
+}
 
 export default function GenerationResultsPage() {
   const params = useParams();
+  const appId = parseInt(params.id as string, 10);
   const generationId = parseInt(params.generationId as string, 10);
 
   const [generation, setGeneration] = useState<GenerationWithScreenshots | null>(null);
+  const [app, setApp] = useState<AppWithScreens | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadGeneration();
     const interval = setInterval(loadStatus, 1000);
     return () => clearInterval(interval);
-  }, [generationId]);
+  }, [appId, generationId]);
 
   const loadGeneration = async () => {
-    const response = await fetch(`/api/generations/${generationId}`);
-    const data = await response.json();
-    setGeneration(data.data);
-    setLoading(false);
+    try {
+      const [generationResponse, appResponse] = await Promise.all([
+        fetch(`/api/generations/${generationId}`),
+        fetch(`/api/apps/${appId}`),
+      ]);
+      const generationPayload = await generationResponse.json();
+      const appPayload = await appResponse.json();
+      setGeneration(generationPayload.data || null);
+      setApp(appPayload.data || null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadStatus = async () => {
@@ -48,10 +64,53 @@ export default function GenerationResultsPage() {
     }
   };
 
+  const screenOrderById = useMemo(() => {
+    const map = new Map<number, number>();
+    app?.screens.forEach((screen) => {
+      map.set(screen.id, screen.position + 1);
+    });
+    return map;
+  }, [app]);
+  const groupedScreenshots = useMemo(() => {
+    if (!generation) {
+      return [];
+    }
+
+    const groups = new Map<string, GeneratedScreenshot[]>();
+    generation.screenshots.forEach((screenshot) => {
+      const group = groups.get(screenshot.locale) || [];
+      group.push(screenshot);
+      groups.set(screenshot.locale, group);
+    });
+
+    return Array.from(groups.entries())
+      .sort((a, b) => localeLabel(a[0]).localeCompare(localeLabel(b[0])))
+      .map(([locale, screenshots]) => ({
+        locale,
+        screenshots: [...screenshots].sort((a, b) => {
+          const orderA = screenOrderById.get(a.screen_id) ?? a.screen_id;
+          const orderB = screenOrderById.get(b.screen_id) ?? b.screen_id;
+          return orderA - orderB;
+        }),
+      }));
+  }, [generation, screenOrderById]);
+  const isProcessing =
+    generation?.status === 'pending' || generation?.status === 'processing';
+
+  const screenLabel = (screenId: number) => `Screen ${screenOrderById.get(screenId) ?? screenId}`;
+  const downloadArchive = (locale?: string) => {
+    const downloadPath = locale
+      ? `/api/generations/${generationId}/download?locale=${encodeURIComponent(locale)}`
+      : `/api/generations/${generationId}/download`;
+    const link = document.createElement('a');
+    link.href = downloadPath;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (loading) return <div className="container mx-auto py-8">Loading...</div>;
   if (!generation) return <div className="container mx-auto py-8">Generation not found</div>;
-
-  const isProcessing = generation.status === 'pending' || generation.status === 'processing';
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -105,36 +164,63 @@ export default function GenerationResultsPage() {
 
       {generation.screenshots.length > 0 && (
         <div>
-          <h2 className="text-2xl font-bold mb-4">
-            Generated Screenshots ({generation.screenshots.length})
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {generation.screenshots.map((screenshot) => (
-              <Card key={screenshot.id} className="overflow-hidden">
-                <div className="relative aspect-[9/16] bg-muted">
-                  <Image
-                    src={`/api/generated-images/${screenshot.output_path}`}
-                    alt={`${screenshot.locale} - Screen ${screenshot.screen_id}`}
-                    fill
-                    className="object-contain"
-                    unoptimized
-                  />
-                </div>
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="text-xs">
-                      {screenshot.locale}
-                    </Badge>
-                    <a
-                      href={`/api/generated-images/${screenshot.output_path}`}
-                      download
-                      className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-                    >
-                      Download
-                    </a>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-2xl font-bold">
+              Generated Screenshots ({generation.screenshots.length})
+            </h2>
+            <Button
+              variant="outline"
+              onClick={() => downloadArchive()}
+            >
+              Download All
+            </Button>
+          </div>
+          <div className="space-y-8">
+            {groupedScreenshots.map((group) => (
+              <div key={group.locale}>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold">{localeLabel(group.locale)}</h3>
+                    <Badge variant="outline">{group.locale}</Badge>
                   </div>
-                </CardContent>
-              </Card>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadArchive(group.locale)}
+                  >
+                    Download Locale
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {group.screenshots.map((screenshot) => (
+                    <Card key={screenshot.id} className="overflow-hidden">
+                      <div className="relative aspect-[9/16] bg-muted">
+                        <Image
+                          src={`/api/generated-images/${screenshot.output_path}`}
+                          alt={`${group.locale} - ${screenLabel(screenshot.screen_id)}`}
+                          fill
+                          className="object-contain"
+                          unoptimized
+                        />
+                      </div>
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge variant="secondary" className="text-xs">
+                            {screenLabel(screenshot.screen_id)}
+                          </Badge>
+                          <a
+                            href={`/api/generated-images/${screenshot.output_path}`}
+                            download
+                            className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                          >
+                            Download
+                          </a>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>

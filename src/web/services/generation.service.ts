@@ -111,6 +111,7 @@ export class GenerationService {
                 ? {
                     fontFamily: text_style.font_family,
                     fontSize: text_style.font_size,
+                    subtitleFontSize: text_style.subtitle_size,
                     fontColor: text_style.font_color,
                   }
                 : undefined,

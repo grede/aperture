@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,9 +12,69 @@ import { SUPPORTED_LOCALES } from '@/lib/constants';
 import type { CopiesByScreenAndLocale, AppWithScreens } from '@/types';
 
 type DraftCopy = { title: string; subtitle: string };
+const LANGUAGE_REGION_FALLBACK: Record<string, string> = {
+  en: 'US',
+  de: 'DE',
+  es: 'ES',
+  fr: 'FR',
+  it: 'IT',
+  ja: 'JP',
+  ko: 'KR',
+  pt: 'PT',
+  zh: 'CN',
+  ru: 'RU',
+  uk: 'UA',
+  nl: 'NL',
+  sv: 'SE',
+  da: 'DK',
+  fi: 'FI',
+  no: 'NO',
+  pl: 'PL',
+  tr: 'TR',
+  ar: 'SA',
+  th: 'TH',
+  id: 'ID',
+  ms: 'MY',
+  vi: 'VN',
+  hi: 'IN',
+};
 
 function localeLabel(code: string): string {
   return SUPPORTED_LOCALES.find((locale) => locale.code === code)?.name || code;
+}
+
+function localeRegionCode(code: string): string | null {
+  const parts = code.split('-');
+  if (parts.length >= 2) {
+    const regionCandidate = parts[parts.length - 1];
+
+    if (/^[A-Za-z]{2}$/.test(regionCandidate)) {
+      return regionCandidate.toUpperCase();
+    }
+
+    // Script subtags (e.g. zh-Hans / zh-Hant).
+    if (regionCandidate === 'Hans') return 'CN';
+    if (regionCandidate === 'Hant') return 'TW';
+  }
+
+  const languageCode = parts[0].toLowerCase();
+  return LANGUAGE_REGION_FALLBACK[languageCode] || null;
+}
+
+function flagFromRegionCode(regionCode: string | null): string {
+  if (!regionCode) {
+    return '🌐';
+  }
+
+  return regionCode
+    .toUpperCase()
+    .split('')
+    .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
+    .join('');
+}
+
+function localeFlag(code: string): string {
+  return flagFromRegionCode(localeRegionCode(code));
 }
 
 function collectLocaleCodes(copies: CopiesByScreenAndLocale): string[] {
@@ -38,6 +99,7 @@ export default function CopiesPage() {
   const [aiTargetLocales, setAiTargetLocales] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [removingLocale, setRemovingLocale] = useState(false);
   const [generatingAi, setGeneratingAi] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +175,9 @@ export default function CopiesPage() {
       ),
     [availableLocaleCodes]
   );
+  const savedLocaleCodes = useMemo(() => collectLocaleCodes(copies), [copies]);
+  const canRemoveSelectedLocale =
+    selectedLocale !== 'en' && savedLocaleCodes.includes(selectedLocale);
 
   useEffect(() => {
     if (selectableNewLocales.length > 0) {
@@ -223,6 +288,44 @@ export default function CopiesPage() {
     }
   };
 
+  const removeSelectedLocaleCopies = async () => {
+    if (!app || !canRemoveSelectedLocale) return;
+
+    const confirmed = window.confirm(
+      `Remove all ${localeLabel(selectedLocale)} copies from this app? This cannot be undone.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setRemovingLocale(true);
+    setError(null);
+    setStatusMessage(null);
+
+    try {
+      const response = await fetch(`/api/apps/${app.id}/copies`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locale: selectedLocale }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to remove locale copies');
+      }
+
+      setStatusMessage(`Removed all ${localeLabel(selectedLocale)} copies.`);
+      setSelectedLocale('en');
+      await loadData();
+    } catch (removeError) {
+      setError(
+        removeError instanceof Error ? removeError.message : 'Failed to remove locale copies'
+      );
+    } finally {
+      setRemovingLocale(false);
+    }
+  };
+
   if (loading) return <div className="container mx-auto py-8">Loading...</div>;
   if (!app) return <div className="container mx-auto py-8">App not found</div>;
 
@@ -275,6 +378,16 @@ export default function CopiesPage() {
               </Button>
             </div>
           )}
+
+          {canRemoveSelectedLocale && (
+            <Button
+              variant="destructive"
+              onClick={removeSelectedLocaleCopies}
+              disabled={removingLocale}
+            >
+              {removingLocale ? 'Removing...' : `Remove ${localeLabel(selectedLocale)}`}
+            </Button>
+          )}
         </CardContent>
       </Card>
 
@@ -287,24 +400,43 @@ export default function CopiesPage() {
                 <Badge variant="secondary">{screen.device_type}</Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Title</Label>
-                <Input
-                  value={drafts[screen.id]?.title || ''}
-                  onChange={(event) =>
-                    updateDraft(screen.id, { title: event.target.value })
-                  }
-                />
+            <CardContent className="grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)] sm:items-start">
+              <div className="w-[120px] sm:w-[150px] overflow-hidden rounded-md border bg-muted">
+                <div
+                  className={`relative ${
+                    screen.device_type === 'iPad' || screen.device_type === 'Android-tablet'
+                      ? 'aspect-[3/4]'
+                      : 'aspect-[9/16]'
+                  }`}
+                >
+                  <Image
+                    src={`/api/uploads/${screen.screenshot_path}`}
+                    alt={`Screen ${index + 1} reference`}
+                    fill
+                    className="object-contain"
+                    unoptimized
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Subtitle (optional)</Label>
-                <Input
-                  value={drafts[screen.id]?.subtitle || ''}
-                  onChange={(event) =>
-                    updateDraft(screen.id, { subtitle: event.target.value })
-                  }
-                />
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Title</Label>
+                  <Input
+                    value={drafts[screen.id]?.title || ''}
+                    onChange={(event) =>
+                      updateDraft(screen.id, { title: event.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Subtitle (optional)</Label>
+                  <Input
+                    value={drafts[screen.id]?.subtitle || ''}
+                    onChange={(event) =>
+                      updateDraft(screen.id, { subtitle: event.target.value })
+                    }
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -337,6 +469,9 @@ export default function CopiesPage() {
                     : 'border-input hover:bg-accent'
                 }`}
               >
+                <span className="mr-2" aria-hidden="true">
+                  {localeFlag(locale.code)}
+                </span>
                 {locale.name}
               </button>
             ))}

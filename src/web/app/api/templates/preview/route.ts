@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
       ? {
           fontFamily: validated.text_style.font_family,
           fontSize: validated.text_style.font_size,
+          subtitleFontSize: validated.text_style.subtitle_size,
           fontColor: validated.text_style.font_color,
         }
       : undefined;

@@ -20,6 +20,7 @@ import {
   SUPPORTED_LOCALES,
   TEMPLATE_FONT_OPTIONS,
   TEMPLATE_FONT_SIZE_LIMITS,
+  TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS,
 } from '@/lib/constants';
 import type {
   AppWithScreens,
@@ -240,6 +241,7 @@ export default function GeneratePage() {
   const [copies, setCopies] = useState<CopiesByScreenAndLocale>({});
   const [selectedDevices, setSelectedDevices] = useState<DeviceType[]>([]);
   const [selectedLocales, setSelectedLocales] = useState<string[]>([]);
+  const [previewLocale, setPreviewLocale] = useState('en');
   const [backgroundMode, setBackgroundMode] = useState<TemplateBackground['mode']>('solid');
   const [solidColor, setSolidColor] = useState('#4A90E2');
   const [gradientFrom, setGradientFrom] = useState('#4A90E2');
@@ -249,6 +251,7 @@ export default function GeneratePage() {
   const [backgroundImageError, setBackgroundImageError] = useState<string | null>(null);
   const [fontFamily, setFontFamily] = useState<TemplateFontFamily>('system');
   const [fontSize, setFontSize] = useState(52);
+  const [subtitleFontSize, setSubtitleFontSize] = useState(29);
   const [fontColor, setFontColor] = useState('#FFFFFF');
   const [frameModesByDevice, setFrameModesByDevice] = useState<FrameModesByDevice>({});
   const [frameAssetFilesByDevice, setFrameAssetFilesByDevice] = useState<
@@ -273,6 +276,23 @@ export default function GeneratePage() {
     if (!app) return [];
     return Array.from(new Set(app.screens.map((screen) => screen.device_type))) as DeviceType[];
   }, [app]);
+  const previewDevice = useMemo(() => selectedDevices[0], [selectedDevices]);
+  const previewScreen = useMemo(() => {
+    if (!app || !previewDevice) {
+      return null;
+    }
+
+    return app.screens.find((screen) => screen.device_type === previewDevice) || null;
+  }, [app, previewDevice]);
+  const previewLocaleOptions = useMemo(() => {
+    if (!previewScreen) {
+      return [];
+    }
+
+    return Object.keys(copies[previewScreen.id] || {}).sort((a, b) =>
+      localeLabel(a).localeCompare(localeLabel(b))
+    );
+  }, [copies, previewScreen]);
 
   const availableLocales = useMemo(() => collectSavedLocales(copies), [copies]);
   const templateBackground = useMemo<TemplateBackground | undefined>(() => {
@@ -325,9 +345,10 @@ export default function GeneratePage() {
     () => ({
       font_family: fontFamily,
       font_size: fontSize,
+      subtitle_size: subtitleFontSize,
       font_color: fontColor,
     }),
-    [fontFamily, fontSize, fontColor]
+    [fontFamily, fontSize, subtitleFontSize, fontColor]
   );
   const selectedFontLabel = useMemo(
     () => TEMPLATE_FONT_OPTIONS.find((font) => font.value === fontFamily)?.label || 'System UI',
@@ -365,6 +386,24 @@ export default function GeneratePage() {
       return next;
     });
   }, [app, availableDevices, availableLocales]);
+
+  useEffect(() => {
+    if (previewLocaleOptions.length === 0) {
+      setPreviewLocale('en');
+      return;
+    }
+
+    if (previewLocaleOptions.includes(previewLocale)) {
+      return;
+    }
+
+    if (previewLocaleOptions.includes('en')) {
+      setPreviewLocale('en');
+      return;
+    }
+
+    setPreviewLocale(previewLocaleOptions[0]);
+  }, [previewLocale, previewLocaleOptions]);
 
   useEffect(() => {
     if (selectedDevices.length === 0) {
@@ -428,15 +467,12 @@ export default function GeneratePage() {
 
   useEffect(() => {
     const generatePreview = async () => {
-      if (!app || selectedDevices.length === 0) {
+      if (!app || !previewDevice) {
         setPreviewImage(null);
         setPreviewError(null);
         setPreviewLoading(false);
         return;
       }
-
-      const previewDevice = selectedDevices[0];
-      const previewScreen = app.screens.find((screen) => screen.device_type === previewDevice);
 
       if (!previewScreen) {
         setPreviewImage(null);
@@ -445,11 +481,12 @@ export default function GeneratePage() {
         return;
       }
 
-      const defaultCopy =
+      const previewCopy =
+        copies[previewScreen.id]?.[previewLocale] ||
         copies[previewScreen.id]?.en ||
-        copies[previewScreen.id]?.[Object.keys(copies[previewScreen.id] || {})[0]];
+        copies[previewScreen.id]?.[previewLocaleOptions[0]];
 
-      if (!defaultCopy) {
+      if (!previewCopy) {
         setPreviewError('Add at least one copy before generating preview.');
         setPreviewImage(null);
         setPreviewLoading(false);
@@ -490,8 +527,8 @@ export default function GeneratePage() {
             template_background: templateBackground,
             text_style: templateTextStyle,
             device_type: previewDevice,
-            title: defaultCopy.title,
-            subtitle: defaultCopy.subtitle || '',
+            title: previewCopy.title,
+            subtitle: previewCopy.subtitle || '',
             frame_mode: previewFrameMode,
             frame_asset_file: previewFrameAssetFile,
           }),
@@ -526,7 +563,10 @@ export default function GeneratePage() {
   }, [
     app,
     copies,
-    selectedDevices,
+    previewDevice,
+    previewLocale,
+    previewLocaleOptions,
+    previewScreen,
     backgroundMode,
     templateBackground,
     templateTextStyle,
@@ -746,6 +786,17 @@ export default function GeneratePage() {
       Math.min(TEMPLATE_FONT_SIZE_LIMITS.max, Math.round(value))
     );
     setFontSize(clamped);
+  };
+
+  const updateSubtitleFontSize = (value: number) => {
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    const clamped = Math.max(
+      TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.min,
+      Math.min(TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.max, Math.round(value))
+    );
+    setSubtitleFontSize(clamped);
   };
 
   const startGeneration = async () => {
@@ -1147,7 +1198,7 @@ export default function GeneratePage() {
             <CardTitle>5. Customize Text Style</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="template-font-family">Font</Label>
                 <DropdownMenu>
@@ -1198,7 +1249,7 @@ export default function GeneratePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="template-font-size">Font size</Label>
+                <Label htmlFor="template-font-size">Title size</Label>
                 <div className="flex items-center gap-3">
                   <input
                     id="template-font-size"
@@ -1215,6 +1266,29 @@ export default function GeneratePage() {
                     max={TEMPLATE_FONT_SIZE_LIMITS.max}
                     value={fontSize}
                     onChange={(event) => updateFontSize(Number(event.target.value))}
+                    className="w-20"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="template-subtitle-font-size">Subtitle size</Label>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="template-subtitle-font-size"
+                    type="range"
+                    min={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.min}
+                    max={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.max}
+                    value={subtitleFontSize}
+                    onChange={(event) => updateSubtitleFontSize(Number(event.target.value))}
+                    className="h-10 flex-1"
+                  />
+                  <Input
+                    type="number"
+                    min={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.min}
+                    max={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.max}
+                    value={subtitleFontSize}
+                    onChange={(event) => updateSubtitleFontSize(Number(event.target.value))}
                     className="w-20"
                   />
                 </div>
@@ -1247,7 +1321,7 @@ export default function GeneratePage() {
               </p>
               <p
                 className="mt-2 opacity-90"
-                style={{ fontSize: `${Math.max(12, Math.round(fontSize * 0.55))}px` }}
+                style={{ fontSize: `${subtitleFontSize}px` }}
               >
                 Sample subtitle preview
               </p>
@@ -1257,9 +1331,30 @@ export default function GeneratePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>6. Preview (Default English Copy)</CardTitle>
+            <CardTitle>6. Preview</CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="mx-auto mb-4 max-w-xs space-y-2">
+              <Label htmlFor="preview-locale">Preview locale</Label>
+              {previewLocaleOptions.length > 0 ? (
+                <select
+                  id="preview-locale"
+                  value={previewLocale}
+                  onChange={(event) => setPreviewLocale(event.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {previewLocaleOptions.map((localeCode) => (
+                    <option key={localeCode} value={localeCode}>
+                      {localeLabel(localeCode)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No copy available for the selected preview screen yet.
+                </p>
+              )}
+            </div>
             {previewImage && (
               <div className="relative aspect-[9/16] max-w-xs mx-auto rounded-md border bg-muted">
                 <Image

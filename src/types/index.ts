@@ -158,6 +158,7 @@ export type TemplateFontFamily =
 export interface TemplateTextStyle {
   fontFamily?: TemplateFontFamily;
   fontSize?: number;
+  subtitleFontSize?: number;
   fontColor?: string;
 }
 
