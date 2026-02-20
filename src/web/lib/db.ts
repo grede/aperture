@@ -13,6 +13,7 @@ import type {
   AppWithScreens,
   CopiesByScreenAndLocale,
   GenerationWithScreenshots,
+  GenerationPreset,
 } from '../types';
 import { join } from 'path';
 import { mkdirSync } from 'fs';
@@ -225,6 +226,51 @@ export function getGenerationsByAppId(appId: number): Generation[] {
   const db = getDb();
   const stmt = db.prepare('SELECT * FROM generations WHERE app_id = ? ORDER BY created_at DESC');
   const rows = stmt.all(appId) as any[];
+  return rows.map((row) => ({ ...row, config: JSON.parse(row.config) }));
+}
+
+export function createOrUpdateGenerationPreset(
+  name: string,
+  config: GenerationConfig
+): GenerationPreset {
+  const db = getDb();
+  const normalizedName = name.trim();
+  const stmt = db.prepare(`
+    INSERT INTO generation_presets (name, config)
+    VALUES (?, ?)
+    ON CONFLICT(name) DO UPDATE SET
+      config = excluded.config,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+  stmt.run(normalizedName, JSON.stringify(config));
+
+  const preset = getGenerationPresetByName(normalizedName);
+  if (!preset) {
+    throw new Error('Failed to save generation preset');
+  }
+  return preset;
+}
+
+export function getGenerationPresetById(id: number): GenerationPreset | null {
+  const db = getDb();
+  const stmt = db.prepare('SELECT * FROM generation_presets WHERE id = ?');
+  const row = stmt.get(id) as any;
+  if (!row) return null;
+  return { ...row, config: JSON.parse(row.config) };
+}
+
+export function getGenerationPresetByName(name: string): GenerationPreset | null {
+  const db = getDb();
+  const stmt = db.prepare('SELECT * FROM generation_presets WHERE name = ?');
+  const row = stmt.get(name) as any;
+  if (!row) return null;
+  return { ...row, config: JSON.parse(row.config) };
+}
+
+export function getAllGenerationPresets(): GenerationPreset[] {
+  const db = getDb();
+  const stmt = db.prepare('SELECT * FROM generation_presets ORDER BY updated_at DESC, id DESC');
+  const rows = stmt.all() as any[];
   return rows.map((row) => ({ ...row, config: JSON.parse(row.config) }));
 }
 

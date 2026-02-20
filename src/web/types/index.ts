@@ -155,6 +155,17 @@ export interface GenerationConfig {
 }
 
 /**
+ * Saved generation preset template
+ */
+export interface GenerationPreset {
+  id: number;
+  name: string;
+  config: GenerationConfig;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * Generation entity (screenshot generation run)
  */
 export interface Generation {
@@ -252,6 +263,14 @@ export interface StartGenerationRequest {
   frame_mode: FrameMode;
   frame_modes?: FrameModesByDevice;
   frame_asset_files?: FrameAssetFilesByDevice;
+}
+
+/**
+ * Request to save generation preset template
+ */
+export interface SaveGenerationPresetRequest {
+  name: string;
+  config: StartGenerationRequest;
 }
 
 /**

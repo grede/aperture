@@ -29,6 +29,8 @@ import type {
   FrameAssetFilesByDevice,
   FrameMode,
   FrameModesByDevice,
+  GenerationConfig,
+  GenerationPreset,
   TemplateFontFamily,
   TemplateBackground,
   TemplateStyle,
@@ -262,6 +264,13 @@ export default function GeneratePage() {
   const [frameFilesLoadingByDevice, setFrameFilesLoadingByDevice] = useState<
     Partial<Record<DeviceType, boolean>>
   >({});
+  const [generationPresets, setGenerationPresets] = useState<GenerationPreset[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+  const [presetName, setPresetName] = useState('');
+  const [presetsLoading, setPresetsLoading] = useState(false);
+  const [presetSaving, setPresetSaving] = useState(false);
+  const [presetStatusMessage, setPresetStatusMessage] = useState<string | null>(null);
+  const [presetError, setPresetError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -354,6 +363,37 @@ export default function GeneratePage() {
     () => TEMPLATE_FONT_OPTIONS.find((font) => font.value === fontFamily)?.label || 'System UI',
     [fontFamily]
   );
+  const currentGenerationConfig = useMemo<GenerationConfig>(() => {
+    const selectedDeviceFrameModes: FrameModesByDevice = {};
+    const selectedDeviceFrameAssets: FrameAssetFilesByDevice = {};
+
+    selectedDevices.forEach((deviceType) => {
+      selectedDeviceFrameModes[deviceType] = frameModesByDevice[deviceType] || 'minimal';
+      const selectedFrameAssetFile = selectedFrameAssetFilesByDevice[deviceType];
+      if (selectedFrameAssetFile) {
+        selectedDeviceFrameAssets[deviceType] = selectedFrameAssetFile;
+      }
+    });
+
+    return {
+      devices: selectedDevices,
+      locales: selectedLocales,
+      template_style: BACKGROUND_TEMPLATE_STYLE,
+      template_background: templateBackground,
+      text_style: templateTextStyle,
+      frame_mode: 'minimal',
+      frame_modes: selectedDeviceFrameModes,
+      frame_asset_files:
+        Object.keys(selectedDeviceFrameAssets).length > 0 ? selectedDeviceFrameAssets : undefined,
+    };
+  }, [
+    selectedDevices,
+    selectedLocales,
+    templateBackground,
+    templateTextStyle,
+    frameModesByDevice,
+    selectedFrameAssetFilesByDevice,
+  ]);
 
   useEffect(() => {
     loadData();
@@ -574,6 +614,25 @@ export default function GeneratePage() {
     selectedFrameAssetFilesByDevice,
   ]);
 
+  const loadGenerationPresets = async () => {
+    setPresetsLoading(true);
+    setPresetError(null);
+
+    try {
+      const response = await fetch('/api/generation-presets');
+      if (!response.ok) {
+        throw new Error('Failed to load templates');
+      }
+
+      const payload = await response.json();
+      setGenerationPresets(Array.isArray(payload?.data) ? payload.data : []);
+    } catch (loadError) {
+      setPresetError(loadError instanceof Error ? loadError.message : 'Failed to load templates');
+    } finally {
+      setPresetsLoading(false);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     setError(null);
@@ -596,10 +655,149 @@ export default function GeneratePage() {
 
       setApp(appPayload.data);
       setCopies(copiesPayload.data);
+      await loadGenerationPresets();
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load generation setup');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const applyGenerationPreset = (preset: GenerationPreset) => {
+    const { config } = preset;
+    const applicableDevices = config.devices.filter((device) => availableDevices.includes(device));
+    const applicableLocales = config.locales.filter((locale) => availableLocales.includes(locale));
+
+    const nextFrameModes: FrameModesByDevice = {};
+    const nextFrameAssets: FrameAssetFilesByDevice = {};
+    applicableDevices.forEach((deviceType) => {
+      nextFrameModes[deviceType] = config.frame_modes?.[deviceType] || config.frame_mode;
+      const frameAssetFile = config.frame_asset_files?.[deviceType];
+      if (frameAssetFile) {
+        nextFrameAssets[deviceType] = frameAssetFile;
+      }
+    });
+
+    setSelectedDevices(applicableDevices);
+    setSelectedLocales(applicableLocales);
+    setFrameModesByDevice(nextFrameModes);
+    setSelectedFrameAssetFilesByDevice(nextFrameAssets);
+
+    const background = config.template_background;
+    if (background?.mode === 'solid') {
+      setBackgroundMode('solid');
+      setSolidColor(background.color.toUpperCase());
+    } else if (background?.mode === 'gradient') {
+      setBackgroundMode('gradient');
+      setGradientFrom(background.from.toUpperCase());
+      setGradientTo(background.to.toUpperCase());
+    } else if (background?.mode === 'image') {
+      setBackgroundMode('image');
+      setBackgroundImagePath(background.image_path);
+    } else {
+      setBackgroundMode('solid');
+      setSolidColor('#4A90E2');
+    }
+    setBackgroundImageError(null);
+
+    const textStyle = config.text_style;
+    setFontFamily(textStyle?.font_family || 'system');
+    updateFontSize(textStyle?.font_size ?? 52);
+    updateSubtitleFontSize(textStyle?.subtitle_size ?? 29);
+    setFontColor((textStyle?.font_color || '#FFFFFF').toUpperCase());
+
+    const unavailableDeviceCount = config.devices.length - applicableDevices.length;
+    const unavailableLocaleCount = config.locales.length - applicableLocales.length;
+
+    const skippedDetails: string[] = [];
+    if (unavailableDeviceCount > 0) {
+      skippedDetails.push(`${unavailableDeviceCount} device(s) not present in this app`);
+    }
+    if (unavailableLocaleCount > 0) {
+      skippedDetails.push(`${unavailableLocaleCount} locale(s) not available in copies`);
+    }
+
+    setPresetError(null);
+    setPresetStatusMessage(
+      skippedDetails.length > 0
+        ? `Applied "${preset.name}" with adjustments: ${skippedDetails.join('; ')}.`
+        : `Applied "${preset.name}".`
+    );
+  };
+
+  const handlePresetSelection = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    setPresetError(null);
+    setPresetStatusMessage(null);
+    if (!presetId) {
+      return;
+    }
+
+    const selectedPreset = generationPresets.find((preset) => preset.id === Number(presetId));
+    if (!selectedPreset) {
+      setPresetError('Selected template was not found.');
+      return;
+    }
+
+    applyGenerationPreset(selectedPreset);
+  };
+
+  const saveGenerationPreset = async () => {
+    if (backgroundMode === 'image' && !templateBackground) {
+      setPresetError('Upload a background image before saving a template.');
+      return;
+    }
+    if (selectedDevices.length === 0) {
+      setPresetError('Select at least one device before saving a template.');
+      return;
+    }
+    if (selectedLocales.length === 0) {
+      setPresetError('Select at least one locale before saving a template.');
+      return;
+    }
+
+    const trimmedPresetName = presetName.trim();
+    if (!trimmedPresetName) {
+      setPresetError('Enter a template name.');
+      return;
+    }
+
+    setPresetSaving(true);
+    setPresetError(null);
+    setPresetStatusMessage(null);
+
+    try {
+      const response = await fetch('/api/generation-presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: trimmedPresetName,
+          config: currentGenerationConfig,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to save template');
+      }
+
+      const payload = await response.json();
+      const savedPreset = payload?.data as GenerationPreset;
+      if (!savedPreset || typeof savedPreset.id !== 'number') {
+        throw new Error('Template save succeeded but invalid data was returned');
+      }
+
+      setGenerationPresets((prev) => {
+        const deduped = prev.filter((preset) => preset.id !== savedPreset.id);
+        return [savedPreset, ...deduped];
+      });
+      setSelectedPresetId(String(savedPreset.id));
+      setPresetName('');
+      setPresetStatusMessage(`Saved "${savedPreset.name}".`);
+    } catch (saveError) {
+      setPresetError(saveError instanceof Error ? saveError.message : 'Failed to save template');
+    } finally {
+      setPresetSaving(false);
     }
   };
 
@@ -809,32 +1007,10 @@ export default function GeneratePage() {
     setError(null);
 
     try {
-      const selectedDeviceFrameModes: FrameModesByDevice = {};
-      const selectedDeviceFrameAssets: FrameAssetFilesByDevice = {};
-      selectedDevices.forEach((deviceType) => {
-        selectedDeviceFrameModes[deviceType] = frameModesByDevice[deviceType] || 'minimal';
-        const selectedFrameAssetFile = selectedFrameAssetFilesByDevice[deviceType];
-        if (selectedFrameAssetFile) {
-          selectedDeviceFrameAssets[deviceType] = selectedFrameAssetFile;
-        }
-      });
-
       const response = await fetch(`/api/apps/${appId}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          devices: selectedDevices,
-          locales: selectedLocales,
-          template_style: BACKGROUND_TEMPLATE_STYLE,
-          template_background: templateBackground,
-          text_style: templateTextStyle,
-          frame_mode: 'minimal',
-          frame_modes: selectedDeviceFrameModes,
-          frame_asset_files:
-            Object.keys(selectedDeviceFrameAssets).length > 0
-              ? selectedDeviceFrameAssets
-              : undefined,
-        }),
+        body: JSON.stringify(currentGenerationConfig),
       });
 
       if (!response.ok) {
@@ -894,6 +1070,71 @@ export default function GeneratePage() {
       </div>
 
       <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Templates</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="generation-template-load">Load saved template</Label>
+                <select
+                  id="generation-template-load"
+                  value={selectedPresetId}
+                  onChange={(event) => handlePresetSelection(event.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Select template</option>
+                  {generationPresets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Templates are shared across all apps.
+                </p>
+                {presetsLoading && (
+                  <p className="text-xs text-muted-foreground">Loading templates...</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="generation-template-name">Save current settings as template</Label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="generation-template-name"
+                    value={presetName}
+                    onChange={(event) => setPresetName(event.target.value)}
+                    placeholder="e.g. iPhone + EN + gradient"
+                    maxLength={100}
+                  />
+                  <Button
+                    type="button"
+                    onClick={saveGenerationPreset}
+                    disabled={presetSaving || backgroundImageUploading}
+                    className="sm:w-auto"
+                  >
+                    {presetSaving ? 'Saving...' : 'Save Template'}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Reusing the same name updates the existing template.
+                </p>
+              </div>
+            </div>
+
+            {presetStatusMessage && (
+              <p className="text-sm text-emerald-700">{presetStatusMessage}</p>
+            )}
+            {presetError && (
+              <p className="text-sm text-destructive" role="alert">
+                {presetError}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>1. Select Devices</CardTitle>

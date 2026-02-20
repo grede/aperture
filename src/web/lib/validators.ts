@@ -198,6 +198,18 @@ export const startGenerationSchema = z.object({
 });
 
 /**
+ * Save generation preset schema
+ */
+export const saveGenerationPresetSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Preset name is required')
+    .max(100, 'Preset name must be 100 characters or less'),
+  config: startGenerationSchema,
+});
+
+/**
  * Template preview request schema
  */
 export const templatePreviewSchema = z.object({

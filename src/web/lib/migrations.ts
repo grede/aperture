@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3';
 /**
  * Database schema version
  */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
  * Create all database tables
@@ -77,6 +77,17 @@ function createTables(db: Database.Database): void {
     );
   `);
 
+  // Generation presets table: Shared templates across apps
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS generation_presets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      config TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // Schema version table
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_version (
@@ -99,6 +110,7 @@ function createIndexes(db: Database.Database): void {
   db.exec(
     'CREATE INDEX IF NOT EXISTS idx_generated_screenshots_screen_id ON generated_screenshots(screen_id);'
   );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_generation_presets_name ON generation_presets(name);');
 }
 
 /**
@@ -158,6 +170,7 @@ export function resetDatabase(db: Database.Database): void {
   const tables = [
     'generated_screenshots',
     'generations',
+    'generation_presets',
     'copies',
     'screens',
     'apps',
