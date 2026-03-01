@@ -9,6 +9,7 @@ import { getGenerationWithScreenshots, getScreensByAppId } from '@/lib/db';
 import { readGeneration } from '@/lib/storage';
 import { createZipBuffer } from '@/lib/zip';
 import { errorResponse, handleApiError, getIdFromParams } from '@/lib/api-helpers';
+import type { DeviceType, GeneratedScreenshot } from '@/types';
 
 /**
  * GET /api/generations/:id/download
@@ -41,9 +42,17 @@ export async function GET(
     }
 
     const screenOrderById = new Map<number, number>();
+    const screenPrimaryDeviceById = new Map<number, DeviceType>();
     getScreensByAppId(generation.app_id).forEach((screen) => {
       screenOrderById.set(screen.id, screen.position + 1);
+      screenPrimaryDeviceById.set(screen.id, screen.device_type);
     });
+    const resolveDeviceType = (screenshot: GeneratedScreenshot): DeviceType | null =>
+      screenshot.device_type ?? screenPrimaryDeviceById.get(screenshot.screen_id) ?? null;
+    const resolveDeviceToken = (screenshot: GeneratedScreenshot): string => {
+      const deviceType = resolveDeviceType(screenshot);
+      return deviceType ? deviceType.toLowerCase() : 'unknown';
+    };
 
     const orderedScreenshots = [...scopeScreenshots].sort((a, b) => {
       if (!locale && a.locale !== b.locale) {
@@ -51,13 +60,16 @@ export async function GET(
       }
       const orderA = screenOrderById.get(a.screen_id) ?? a.screen_id;
       const orderB = screenOrderById.get(b.screen_id) ?? b.screen_id;
-      return orderA - orderB;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return resolveDeviceToken(a).localeCompare(resolveDeviceToken(b));
     });
 
     const entries = await Promise.all(
       orderedScreenshots.map(async (screenshot) => {
         const order = screenOrderById.get(screenshot.screen_id) ?? screenshot.screen_id;
-        const fileName = `screen-${String(order).padStart(2, '0')}.png`;
+        const fileName = `screen-${String(order).padStart(2, '0')}-${resolveDeviceToken(screenshot)}.png`;
         const entryName = locale ? fileName : `${screenshot.locale}/${fileName}`;
         const imageBuffer = await readGeneration(screenshot.output_path);
         return { name: entryName, data: imageBuffer };

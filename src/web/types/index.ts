@@ -116,15 +116,28 @@ export interface App {
 }
 
 /**
- * Screen entity (screenshot within an app)
+ * Device-specific screenshot variant for a screen
+ */
+export interface ScreenVariant {
+  id: number;
+  screen_id: number;
+  device_type: DeviceType;
+  screenshot_path: string;
+  created_at: string;
+}
+
+/**
+ * Screen entity (logical screen within an app)
  */
 export interface Screen {
   id: number;
   app_id: number;
+  // Legacy primary screenshot fields retained for backward compatibility.
   screenshot_path: string;
   device_type: DeviceType;
   position: number;
   created_at: string;
+  variants: ScreenVariant[];
 }
 
 /**
@@ -187,6 +200,7 @@ export interface GeneratedScreenshot {
   generation_id: number;
   screen_id: number;
   locale: string;
+  device_type: DeviceType | null;
   output_path: string;
   created_at: string;
 }

@@ -7,11 +7,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { SUPPORTED_LOCALES } from '@/lib/constants';
-import type { AppWithScreens, GenerationWithScreenshots, GeneratedScreenshot } from '@/types';
+import { DEVICE_TYPE_LABELS, SUPPORTED_LOCALES } from '@/lib/constants';
+import type {
+  AppWithScreens,
+  DeviceType,
+  GenerationWithScreenshots,
+  GeneratedScreenshot,
+} from '@/types';
 
 function localeLabel(code: string): string {
   return SUPPORTED_LOCALES.find((locale) => locale.code === code)?.name || code;
+}
+
+function isTabletDevice(deviceType: DeviceType | null): boolean {
+  return deviceType === 'iPad' || deviceType === 'Android-tablet';
 }
 
 export default function GenerationResultsPage() {
@@ -71,6 +80,15 @@ export default function GenerationResultsPage() {
     });
     return map;
   }, [app]);
+  const screenPrimaryDeviceById = useMemo(() => {
+    const map = new Map<number, DeviceType>();
+    app?.screens.forEach((screen) => {
+      map.set(screen.id, screen.device_type);
+    });
+    return map;
+  }, [app]);
+  const resolveScreenshotDeviceType = (screenshot: GeneratedScreenshot): DeviceType | null =>
+    screenshot.device_type ?? screenPrimaryDeviceById.get(screenshot.screen_id) ?? null;
   const groupedScreenshots = useMemo(() => {
     if (!generation) {
       return [];
@@ -90,10 +108,16 @@ export default function GenerationResultsPage() {
         screenshots: [...screenshots].sort((a, b) => {
           const orderA = screenOrderById.get(a.screen_id) ?? a.screen_id;
           const orderB = screenOrderById.get(b.screen_id) ?? b.screen_id;
-          return orderA - orderB;
+          if (orderA !== orderB) {
+            return orderA - orderB;
+          }
+
+          const deviceA = resolveScreenshotDeviceType(a);
+          const deviceB = resolveScreenshotDeviceType(b);
+          return String(deviceA ?? '').localeCompare(String(deviceB ?? ''));
         }),
       }));
-  }, [generation, screenOrderById]);
+  }, [generation, screenOrderById, screenPrimaryDeviceById]);
   const isProcessing =
     generation?.status === 'pending' || generation?.status === 'processing';
 
@@ -192,33 +216,50 @@ export default function GenerationResultsPage() {
                   </Button>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {group.screenshots.map((screenshot) => (
-                    <Card key={screenshot.id} className="overflow-hidden">
-                      <div className="relative aspect-[9/16] bg-muted">
-                        <Image
-                          src={`/api/generated-images/${screenshot.output_path}`}
-                          alt={`${group.locale} - ${screenLabel(screenshot.screen_id)}`}
-                          fill
-                          className="object-contain"
-                          unoptimized
-                        />
-                      </div>
-                      <CardContent className="p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <Badge variant="secondary" className="text-xs">
-                            {screenLabel(screenshot.screen_id)}
-                          </Badge>
-                          <a
-                            href={`/api/generated-images/${screenshot.output_path}`}
-                            download
-                            className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-                          >
-                            Download
-                          </a>
+                  {group.screenshots.map((screenshot) => {
+                    const screenshotDeviceType = resolveScreenshotDeviceType(screenshot);
+
+                    return (
+                      <Card key={screenshot.id} className="overflow-hidden">
+                        <div
+                          className={`relative ${
+                            isTabletDevice(screenshotDeviceType)
+                              ? 'aspect-[3/4]'
+                              : 'aspect-[9/16]'
+                          } bg-muted`}
+                        >
+                          <Image
+                            src={`/api/generated-images/${screenshot.output_path}`}
+                            alt={`${group.locale} - ${screenLabel(screenshot.screen_id)}`}
+                            fill
+                            className="object-contain"
+                            unoptimized
+                          />
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        <CardContent className="p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-1">
+                              <Badge variant="secondary" className="text-xs">
+                                {screenLabel(screenshot.screen_id)}
+                              </Badge>
+                              {screenshotDeviceType && (
+                                <Badge variant="outline" className="text-xs">
+                                  {DEVICE_TYPE_LABELS[screenshotDeviceType]}
+                                </Badge>
+                              )}
+                            </div>
+                            <a
+                              href={`/api/generated-images/${screenshot.output_path}`}
+                              download
+                              className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                            >
+                              Download
+                            </a>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             ))}

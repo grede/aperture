@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { SUPPORTED_LOCALES } from '@/lib/constants';
+import { DEVICE_TYPE_LABELS, SUPPORTED_LOCALES } from '@/lib/constants';
 import type { CopiesByScreenAndLocale, AppWithScreens } from '@/types';
 
 type DraftCopy = { title: string; subtitle: string };
@@ -392,55 +392,68 @@ export default function CopiesPage() {
       </Card>
 
       <div className="space-y-4">
-        {app.screens.map((screen, index) => (
-          <Card key={screen.id}>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                Screen {index + 1}
-                <Badge variant="secondary">{screen.device_type}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)] sm:items-start">
-              <div className="w-[120px] sm:w-[150px] overflow-hidden rounded-md border bg-muted">
-                <div
-                  className={`relative ${
-                    screen.device_type === 'iPad' || screen.device_type === 'Android-tablet'
-                      ? 'aspect-[3/4]'
-                      : 'aspect-[9/16]'
-                  }`}
-                >
-                  <Image
-                    src={`/api/uploads/${screen.screenshot_path}`}
-                    alt={`Screen ${index + 1} reference`}
-                    fill
-                    className="object-contain"
-                    unoptimized
-                  />
+        {app.screens.map((screen, index) => {
+          const previewVariant =
+            screen.variants.find((variant) => variant.device_type === 'iPhone') ||
+            screen.variants[0];
+          const previewDeviceType = previewVariant?.device_type || screen.device_type;
+
+          return (
+            <Card key={screen.id}>
+              <CardHeader>
+                <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+                  <span>Screen {index + 1}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {screen.variants.map((variant) => (
+                      <Badge key={variant.id} variant="secondary">
+                        {DEVICE_TYPE_LABELS[variant.device_type]}
+                      </Badge>
+                    ))}
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)] sm:items-start">
+                <div className="w-[120px] sm:w-[150px] overflow-hidden rounded-md border bg-muted">
+                  <div
+                    className={`relative ${
+                      previewDeviceType === 'iPad' || previewDeviceType === 'Android-tablet'
+                        ? 'aspect-[3/4]'
+                        : 'aspect-[9/16]'
+                    }`}
+                  >
+                    <Image
+                      src={`/api/uploads/${previewVariant?.screenshot_path || screen.screenshot_path}`}
+                      alt={`Screen ${index + 1} reference`}
+                      fill
+                      className="object-contain"
+                      unoptimized
+                    />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input
-                    value={drafts[screen.id]?.title || ''}
-                    onChange={(event) =>
-                      updateDraft(screen.id, { title: event.target.value })
-                    }
-                  />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Title</Label>
+                    <Input
+                      value={drafts[screen.id]?.title || ''}
+                      onChange={(event) =>
+                        updateDraft(screen.id, { title: event.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Subtitle (optional)</Label>
+                    <Input
+                      value={drafts[screen.id]?.subtitle || ''}
+                      onChange={(event) =>
+                        updateDraft(screen.id, { subtitle: event.target.value })
+                      }
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Subtitle (optional)</Label>
-                  <Input
-                    value={drafts[screen.id]?.subtitle || ''}
-                    onChange={(event) =>
-                      updateDraft(screen.id, { subtitle: event.target.value })
-                    }
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       <div className="mt-6">

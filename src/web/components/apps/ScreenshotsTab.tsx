@@ -29,6 +29,7 @@ export default function AppDetailsPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadTargetScreenId, setUploadTargetScreenId] = useState('new');
   const [uploadDeviceType, setUploadDeviceType] = useState<DeviceType>('iPhone');
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadSubtitle, setUploadSubtitle] = useState('');
@@ -37,10 +38,41 @@ export default function AppDetailsPage() {
     () => generations.filter((generation) => generation.status === 'completed'),
     [generations]
   );
+  const uploadTargetScreen = useMemo(() => {
+    if (!app || uploadTargetScreenId === 'new') {
+      return null;
+    }
+    const screenId = Number(uploadTargetScreenId);
+    return app.screens.find((screen) => screen.id === screenId) || null;
+  }, [app, uploadTargetScreenId]);
+  const isAddingVariant = uploadTargetScreenId !== 'new';
+  const availableUploadDeviceTypes = useMemo(() => {
+    if (!isAddingVariant) {
+      return DEVICE_TYPES;
+    }
+    if (!uploadTargetScreen) {
+      return [];
+    }
+    return DEVICE_TYPES.filter((deviceType) =>
+      uploadTargetScreen.variants.every((variant) => variant.device_type !== deviceType)
+    );
+  }, [isAddingVariant, uploadTargetScreen]);
 
   useEffect(() => {
     loadData();
   }, [appId]);
+
+  useEffect(() => {
+    if (!availableUploadDeviceTypes.includes(uploadDeviceType)) {
+      setUploadDeviceType(availableUploadDeviceTypes[0] || 'iPhone');
+    }
+  }, [availableUploadDeviceTypes, uploadDeviceType]);
+
+  useEffect(() => {
+    if (uploadTargetScreenId !== 'new' && !uploadTargetScreen) {
+      setUploadTargetScreenId('new');
+    }
+  }, [uploadTargetScreen, uploadTargetScreenId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -76,7 +108,12 @@ export default function AppDetailsPage() {
       return;
     }
 
-    if (!uploadTitle.trim()) {
+    if (availableUploadDeviceTypes.length === 0) {
+      setError('This screen already has screenshots for all device types');
+      return;
+    }
+
+    if (!isAddingVariant && !uploadTitle.trim()) {
       setError('Title is required');
       return;
     }
@@ -88,8 +125,12 @@ export default function AppDetailsPage() {
       const formData = new FormData();
       formData.append('file', uploadFile);
       formData.append('deviceType', uploadDeviceType);
-      formData.append('title', uploadTitle.trim());
-      formData.append('subtitle', uploadSubtitle.trim());
+      if (isAddingVariant) {
+        formData.append('screenId', uploadTargetScreenId);
+      } else {
+        formData.append('title', uploadTitle.trim());
+        formData.append('subtitle', uploadSubtitle.trim());
+      }
 
       const response = await fetch(`/api/apps/${appId}/screens`, {
         method: 'POST',
@@ -97,12 +138,15 @@ export default function AppDetailsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to upload screenshot');
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to upload screenshot');
       }
 
       setUploadFile(null);
-      setUploadTitle('');
-      setUploadSubtitle('');
+      if (!isAddingVariant) {
+        setUploadTitle('');
+        setUploadSubtitle('');
+      }
       await loadData();
     } catch (uploadError) {
       setError(
@@ -183,12 +227,30 @@ export default function AppDetailsPage() {
       {/* Add Screen Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Add Screen</CardTitle>
+          <CardTitle>{isAddingVariant ? 'Add Screen Version' : 'Add Screen'}</CardTitle>
           <CardDescription>
-            Upload raw screenshot and set default English copy for this screen.
+            {isAddingVariant
+              ? 'Attach another device screenshot to an existing screen.'
+              : 'Upload a screenshot and set default English copy for a new screen.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6">
+          <div className="space-y-2 md:col-span-2">
+            <Label>Add To</Label>
+            <select
+              value={uploadTargetScreenId}
+              onChange={(event) => setUploadTargetScreenId(event.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="new">New screen</option>
+              {app.screens.map((screen) => (
+                <option key={screen.id} value={screen.id}>
+                  {`Screen ${screen.position + 1} (${screen.variants.length}/4 device types)`}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="space-y-2 md:col-span-2">
             <Label>Screenshot</Label>
             <Input
@@ -204,36 +266,53 @@ export default function AppDetailsPage() {
               value={uploadDeviceType}
               onChange={(event) => setUploadDeviceType(event.target.value as DeviceType)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              disabled={availableUploadDeviceTypes.length === 0}
             >
-              {DEVICE_TYPES.map((deviceType) => (
+              {availableUploadDeviceTypes.map((deviceType) => (
                 <option key={deviceType} value={deviceType}>
                   {DEVICE_TYPE_LABELS[deviceType]}
                 </option>
               ))}
             </select>
+            {isAddingVariant && availableUploadDeviceTypes.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                This screen already has iPhone, iPad, Android phone, and Android tablet versions.
+              </p>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label>Title</Label>
-            <Input
-              value={uploadTitle}
-              onChange={(event) => setUploadTitle(event.target.value)}
-              placeholder="Powerful editing in one tap"
-            />
-          </div>
+          {!isAddingVariant && (
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input
+                value={uploadTitle}
+                onChange={(event) => setUploadTitle(event.target.value)}
+                placeholder="Powerful editing in one tap"
+              />
+            </div>
+          )}
 
-          <div className="space-y-2 md:col-span-2">
-            <Label>Subtitle (optional)</Label>
-            <Input
-              value={uploadSubtitle}
-              onChange={(event) => setUploadSubtitle(event.target.value)}
-              placeholder="Create polished visuals in seconds"
-            />
-          </div>
+          {!isAddingVariant && (
+            <div className="space-y-2 md:col-span-2">
+              <Label>Subtitle (optional)</Label>
+              <Input
+                value={uploadSubtitle}
+                onChange={(event) => setUploadSubtitle(event.target.value)}
+                placeholder="Create polished visuals in seconds"
+              />
+            </div>
+          )}
 
           <div className="md:col-span-2">
-            <Button onClick={uploadScreen} disabled={uploading}>
-              {uploading ? 'Uploading...' : 'Upload Screen'}
+            <Button
+              onClick={uploadScreen}
+              disabled={uploading || availableUploadDeviceTypes.length === 0}
+            >
+              {uploading
+                ? 'Uploading...'
+                : isAddingVariant
+                ? 'Add Screen Version'
+                : 'Upload Screen'}
             </Button>
           </div>
         </CardContent>

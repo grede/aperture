@@ -12,8 +12,15 @@ import {
   createGeneratedScreenshot,
   getAppById,
 } from '../lib/db';
-import { readTemplateBackground, readUpload, saveGeneration } from '../lib/storage';
+import { readTemplateBackground, readUploadByPath, saveGeneration } from '../lib/storage';
 import { DEVICE_TYPE_TO_TEMPLATE } from '../lib/constants';
+import type { DeviceType, Screen, ScreenVariant } from '../types';
+
+type ScreenDeviceVariantTask = {
+  screen: Screen;
+  deviceType: DeviceType;
+  variant: ScreenVariant;
+};
 
 /**
  * Generation service for orchestrating screenshot generation
@@ -65,19 +72,32 @@ export class GenerationService {
         throw new Error('No screens found for this app');
       }
 
-      // Filter screens by requested device types
-      const relevantScreens = screens.filter((screen) => devices.includes(screen.device_type));
+      const relevantScreenVariantTasks: ScreenDeviceVariantTask[] = [];
+      for (const screen of screens) {
+        for (const deviceType of devices) {
+          const variant = screen.variants.find((candidate) => candidate.device_type === deviceType);
+          if (variant) {
+            relevantScreenVariantTasks.push({
+              screen,
+              deviceType,
+              variant,
+            });
+          }
+        }
+      }
 
-      if (relevantScreens.length === 0) {
+      if (relevantScreenVariantTasks.length === 0) {
         throw new Error('No screens match the selected device types');
       }
 
       // Calculate total tasks
-      const totalTasks = relevantScreens.length * locales.length;
+      const totalTasks = relevantScreenVariantTasks.length * locales.length;
       let completedTasks = 0;
 
-      // Process each screen for each locale
-      for (const screen of relevantScreens) {
+      // Process each screen/device variant for each locale
+      for (const task of relevantScreenVariantTasks) {
+        const { screen, deviceType, variant } = task;
+
         for (const locale of locales) {
           try {
             // Check if copy exists for this screen + locale
@@ -91,14 +111,14 @@ export class GenerationService {
             }
 
             // Load original screenshot
-            const screenshotBuffer = await readUpload(app_id, screen.id);
+            const screenshotBuffer = await readUploadByPath(variant.screenshot_path);
 
             // Map device type to template device type
-            const templateDeviceType = DEVICE_TYPE_TO_TEMPLATE[screen.device_type];
-            const resolvedFrameMode = frame_modes?.[screen.device_type] ?? frame_mode ?? 'minimal';
+            const templateDeviceType = DEVICE_TYPE_TO_TEMPLATE[deviceType];
+            const resolvedFrameMode = frame_modes?.[deviceType] ?? frame_mode ?? 'minimal';
             const resolvedFrameAssetFile =
               resolvedFrameMode === 'realistic'
-                ? frame_asset_files?.[screen.device_type]
+                ? frame_asset_files?.[deviceType]
                 : undefined;
 
             // Generate composited image
@@ -124,17 +144,26 @@ export class GenerationService {
             );
 
             // Save generated image
-            const outputPath = await saveGeneration(generationId, locale, screen.id, outputBuffer);
+            const outputPath = await saveGeneration(
+              generationId,
+              locale,
+              screen.id,
+              outputBuffer,
+              deviceType
+            );
 
             // Record in database
-            createGeneratedScreenshot(generationId, screen.id, locale, outputPath);
+            createGeneratedScreenshot(generationId, screen.id, locale, outputPath, deviceType);
 
             // Update progress
             completedTasks++;
             const progress = Math.round((completedTasks / totalTasks) * 100);
             updateGenerationProgress(generationId, progress);
           } catch (error: any) {
-            console.error(`Error processing screen ${screen.id} for locale ${locale}:`, error);
+            console.error(
+              `Error processing screen ${screen.id} (${deviceType}) for locale ${locale}:`,
+              error
+            );
             // Continue with next task even if one fails
             completedTasks++;
             const progress = Math.round((completedTasks / totalTasks) * 100);

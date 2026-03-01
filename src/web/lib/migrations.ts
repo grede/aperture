@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3';
 /**
  * Database schema version
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /**
  * Create all database tables
@@ -30,6 +30,19 @@ function createTables(db: Database.Database): void {
       position INTEGER NOT NULL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE
+    );
+  `);
+
+  // Screen variants table: Device-specific screenshot versions per logical screen
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS screen_variants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      screen_id INTEGER NOT NULL,
+      device_type TEXT NOT NULL CHECK(device_type IN ('iPhone', 'iPad', 'Android-phone', 'Android-tablet')),
+      screenshot_path TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (screen_id) REFERENCES screens(id) ON DELETE CASCADE,
+      UNIQUE(screen_id, device_type)
     );
   `);
 
@@ -70,6 +83,7 @@ function createTables(db: Database.Database): void {
       generation_id INTEGER NOT NULL,
       screen_id INTEGER NOT NULL,
       locale TEXT NOT NULL,
+      device_type TEXT CHECK(device_type IN ('iPhone', 'iPad', 'Android-phone', 'Android-tablet')),
       output_path TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (generation_id) REFERENCES generations(id) ON DELETE CASCADE,
@@ -101,6 +115,10 @@ function createTables(db: Database.Database): void {
  */
 function createIndexes(db: Database.Database): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_screens_app_id ON screens(app_id);');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_screen_variants_screen_id ON screen_variants(screen_id);');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_screen_variants_device_type ON screen_variants(device_type);'
+  );
   db.exec('CREATE INDEX IF NOT EXISTS idx_copies_screen_id ON copies(screen_id);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_copies_locale ON copies(locale);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_generations_app_id ON generations(app_id);');
@@ -111,6 +129,56 @@ function createIndexes(db: Database.Database): void {
     'CREATE INDEX IF NOT EXISTS idx_generated_screenshots_screen_id ON generated_screenshots(screen_id);'
   );
   db.exec('CREATE INDEX IF NOT EXISTS idx_generation_presets_name ON generation_presets(name);');
+}
+
+function tableHasColumn(db: Database.Database, tableName: string, columnName: string): boolean {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  return columns.some((column) => column.name === columnName);
+}
+
+function migrateToV3(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS screen_variants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      screen_id INTEGER NOT NULL,
+      device_type TEXT NOT NULL CHECK(device_type IN ('iPhone', 'iPad', 'Android-phone', 'Android-tablet')),
+      screenshot_path TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (screen_id) REFERENCES screens(id) ON DELETE CASCADE,
+      UNIQUE(screen_id, device_type)
+    );
+  `);
+
+  if (!tableHasColumn(db, 'generated_screenshots', 'device_type')) {
+    db.exec(`
+      ALTER TABLE generated_screenshots
+      ADD COLUMN device_type TEXT CHECK(device_type IN ('iPhone', 'iPad', 'Android-phone', 'Android-tablet'));
+    `);
+  }
+
+  db.exec(`
+    INSERT INTO screen_variants (screen_id, device_type, screenshot_path)
+    SELECT s.id, s.device_type, s.screenshot_path
+    FROM screens s
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM screen_variants sv
+      WHERE sv.screen_id = s.id
+        AND sv.device_type = s.device_type
+    );
+  `);
+
+  if (tableHasColumn(db, 'generated_screenshots', 'device_type')) {
+    db.exec(`
+      UPDATE generated_screenshots
+      SET device_type = (
+        SELECT s.device_type
+        FROM screens s
+        WHERE s.id = generated_screenshots.screen_id
+      )
+      WHERE device_type IS NULL;
+    `);
+  }
 }
 
 /**
@@ -156,6 +224,10 @@ export function migrate(db: Database.Database): void {
     // Create indexes
     createIndexes(db);
 
+    if (currentVersion < 3) {
+      migrateToV3(db);
+    }
+
     // Update schema version
     setSchemaVersion(db, SCHEMA_VERSION);
 
@@ -172,6 +244,7 @@ export function resetDatabase(db: Database.Database): void {
     'generations',
     'generation_presets',
     'copies',
+    'screen_variants',
     'screens',
     'apps',
     'schema_version',

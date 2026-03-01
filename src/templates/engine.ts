@@ -1057,7 +1057,13 @@ export class TemplateEngine {
   ): string {
     const titleSubtitleGap = Math.max(10, Math.round(style.titleSize * 0.28));
     const subtitleLineGap = Math.max(8, Math.round(style.subtitleSize * 0.42));
-    const maxCharsPerLine = Math.max(18, Math.round((50 * 24) / style.subtitleSize));
+    const horizontalTextPadding = Math.max(32, style.textPadding);
+    const subtitleMaxWidth = Math.max(320, canvasWidth - horizontalTextPadding * 2);
+    const avgSubtitleCharWidth = style.subtitleSize * 0.52;
+    const maxCharsPerLine = Math.max(
+      18,
+      Math.round(subtitleMaxWidth / Math.max(8, avgSubtitleCharWidth))
+    );
     const subtitleLines = this.wrapText(subtitle, maxCharsPerLine);
     const subtitleBlockHeight =
       subtitleLines.length > 0

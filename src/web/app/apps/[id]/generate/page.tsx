@@ -33,6 +33,8 @@ import type {
   GenerationPreset,
   TemplateFontFamily,
   TemplateBackground,
+  Screen,
+  ScreenVariant,
   TemplateStyle,
 } from '@/types';
 
@@ -143,6 +145,14 @@ function collectSavedLocales(copies: CopiesByScreenAndLocale): string[] {
     Object.keys(byLocale).forEach((locale) => localeSet.add(locale));
   });
   return Array.from(localeSet).sort((a, b) => localeLabel(a).localeCompare(localeLabel(b)));
+}
+
+function findVariantForDevice(screen: Screen, deviceType: DeviceType): ScreenVariant | null {
+  return screen.variants.find((variant) => variant.device_type === deviceType) || null;
+}
+
+function screenHasDeviceVariant(screen: Screen, deviceType: DeviceType): boolean {
+  return findVariantForDevice(screen, deviceType) !== null;
 }
 
 function bufferToBase64(buffer: ArrayBuffer): string {
@@ -283,7 +293,13 @@ export default function GeneratePage() {
 
   const availableDevices = useMemo(() => {
     if (!app) return [];
-    return Array.from(new Set(app.screens.map((screen) => screen.device_type))) as DeviceType[];
+    return Array.from(
+      new Set(
+        app.screens.flatMap((screen) =>
+          screen.variants.map((variant) => variant.device_type)
+        )
+      )
+    ) as DeviceType[];
   }, [app]);
   const previewDevice = useMemo(() => selectedDevices[0], [selectedDevices]);
   const previewScreen = useMemo(() => {
@@ -291,8 +307,14 @@ export default function GeneratePage() {
       return null;
     }
 
-    return app.screens.find((screen) => screen.device_type === previewDevice) || null;
+    return app.screens.find((screen) => screenHasDeviceVariant(screen, previewDevice)) || null;
   }, [app, previewDevice]);
+  const previewVariant = useMemo(() => {
+    if (!previewScreen || !previewDevice) {
+      return null;
+    }
+    return findVariantForDevice(previewScreen, previewDevice);
+  }, [previewScreen, previewDevice]);
   const previewLocaleOptions = useMemo(() => {
     if (!previewScreen) {
       return [];
@@ -394,6 +416,10 @@ export default function GeneratePage() {
     frameModesByDevice,
     selectedFrameAssetFilesByDevice,
   ]);
+  const selectedPreset = useMemo(
+    () => generationPresets.find((preset) => preset.id === Number(selectedPresetId)) || null,
+    [generationPresets, selectedPresetId]
+  );
 
   useEffect(() => {
     loadData();
@@ -521,6 +547,13 @@ export default function GeneratePage() {
         return;
       }
 
+      if (!previewVariant) {
+        setPreviewError('No screenshot found for the selected preview device.');
+        setPreviewImage(null);
+        setPreviewLoading(false);
+        return;
+      }
+
       const previewCopy =
         copies[previewScreen.id]?.[previewLocale] ||
         copies[previewScreen.id]?.en ||
@@ -545,7 +578,7 @@ export default function GeneratePage() {
       setPreviewError(null);
 
       try {
-        const imageResponse = await fetch(`/api/uploads/${previewScreen.screenshot_path}`);
+        const imageResponse = await fetch(`/api/uploads/${previewVariant.screenshot_path}`);
         if (!imageResponse.ok) {
           throw new Error('Failed to load source screenshot');
         }
@@ -607,6 +640,7 @@ export default function GeneratePage() {
     previewLocale,
     previewLocaleOptions,
     previewScreen,
+    previewVariant,
     backgroundMode,
     templateBackground,
     templateTextStyle,
@@ -730,6 +764,7 @@ export default function GeneratePage() {
     setPresetError(null);
     setPresetStatusMessage(null);
     if (!presetId) {
+      setPresetName('');
       return;
     }
 
@@ -739,6 +774,7 @@ export default function GeneratePage() {
       return;
     }
 
+    setPresetName(selectedPreset.name);
     applyGenerationPreset(selectedPreset);
   };
 
@@ -756,8 +792,12 @@ export default function GeneratePage() {
       return;
     }
 
+    const loadedPreset = generationPresets.find(
+      (preset) => preset.id === Number(selectedPresetId)
+    );
     const trimmedPresetName = presetName.trim();
-    if (!trimmedPresetName) {
+    const targetPresetName = trimmedPresetName || loadedPreset?.name || '';
+    if (!targetPresetName) {
       setPresetError('Enter a template name.');
       return;
     }
@@ -771,7 +811,7 @@ export default function GeneratePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: trimmedPresetName,
+          name: targetPresetName,
           config: currentGenerationConfig,
         }),
       });
@@ -786,14 +826,19 @@ export default function GeneratePage() {
       if (!savedPreset || typeof savedPreset.id !== 'number') {
         throw new Error('Template save succeeded but invalid data was returned');
       }
+      const wasUpdatingLoadedPreset = loadedPreset?.id === savedPreset.id;
 
       setGenerationPresets((prev) => {
         const deduped = prev.filter((preset) => preset.id !== savedPreset.id);
         return [savedPreset, ...deduped];
       });
       setSelectedPresetId(String(savedPreset.id));
-      setPresetName('');
-      setPresetStatusMessage(`Saved "${savedPreset.name}".`);
+      setPresetName(savedPreset.name);
+      setPresetStatusMessage(
+        wasUpdatingLoadedPreset
+          ? `Updated "${savedPreset.name}".`
+          : `Saved "${savedPreset.name}".`
+      );
     } catch (saveError) {
       setPresetError(saveError instanceof Error ? saveError.message : 'Failed to save template');
     } finally {
@@ -912,9 +957,12 @@ export default function GeneratePage() {
 
     const suggestionDevice = selectedDevices[0];
     const suggestionScreen =
-      app.screens.find((screen) => screen.device_type === suggestionDevice) || app.screens[0];
+      app.screens.find((screen) => screenHasDeviceVariant(screen, suggestionDevice)) || app.screens[0];
+    const suggestionVariant = suggestionScreen
+      ? findVariantForDevice(suggestionScreen, suggestionDevice) || suggestionScreen.variants[0]
+      : null;
 
-    if (!suggestionScreen) {
+    if (!suggestionScreen || !suggestionVariant) {
       setGradientSuggestionError('No screenshots found for this app.');
       return;
     }
@@ -923,7 +971,7 @@ export default function GeneratePage() {
     setGradientSuggestionError(null);
 
     try {
-      const imageResponse = await fetch(`/api/uploads/${suggestionScreen.screenshot_path}`);
+      const imageResponse = await fetch(`/api/uploads/${suggestionVariant.screenshot_path}`);
       if (!imageResponse.ok) {
         throw new Error('Failed to load source screenshot');
       }
@@ -1057,10 +1105,13 @@ export default function GeneratePage() {
     );
   }
 
-  const selectedScreensCount = app.screens.filter((screen) =>
-    selectedDevices.includes(screen.device_type)
-  ).length;
-  const estimatedOutputCount = selectedScreensCount * selectedLocales.length;
+  const selectedScreenVariantCount = app.screens.reduce((total, screen) => {
+    const variantCountForSelectedDevices = selectedDevices.filter((deviceType) =>
+      screenHasDeviceVariant(screen, deviceType)
+    ).length;
+    return total + variantCountForSelectedDevices;
+  }, 0);
+  const estimatedOutputCount = selectedScreenVariantCount * selectedLocales.length;
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-5xl">
@@ -1115,12 +1166,23 @@ export default function GeneratePage() {
                     disabled={presetSaving || backgroundImageUploading}
                     className="sm:w-auto"
                   >
-                    {presetSaving ? 'Saving...' : 'Save Template'}
+                    {presetSaving
+                      ? 'Saving...'
+                      : selectedPreset &&
+                        (presetName.trim().length === 0 || presetName.trim() === selectedPreset.name)
+                      ? 'Update Template'
+                      : 'Save Template'}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Reusing the same name updates the existing template.
                 </p>
+                {selectedPreset && (
+                  <p className="text-xs text-muted-foreground">
+                    Loaded: <span className="font-medium">{selectedPreset.name}</span>. Keep this
+                    name to update it, or change the name to save as a new template.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1625,7 +1687,7 @@ export default function GeneratePage() {
           <CardContent className="pt-6">
             <div className="text-center space-y-4">
               <div className="text-sm text-muted-foreground">
-                {selectedScreensCount} selected screen(s) × {selectedLocales.length} locale(s) ={' '}
+                {selectedScreenVariantCount} selected screen-device variant(s) × {selectedLocales.length} locale(s) ={' '}
                 {estimatedOutputCount} output image(s)
               </div>
               <Button

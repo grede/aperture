@@ -13,24 +13,31 @@ interface ScreenCardProps {
 }
 
 export function ScreenCard({ screen, onDelete }: ScreenCardProps) {
-  const imagePath = `/api/uploads/${screen.screenshot_path}`;
+  const previewVariant =
+    screen.variants.find((variant) => variant.device_type === screen.device_type) ||
+    screen.variants[0];
+  const imagePath = `/api/uploads/${previewVariant?.screenshot_path || screen.screenshot_path}`;
 
   return (
     <Card className="overflow-hidden">
       <div className="relative aspect-[9/16] bg-muted">
         <Image
           src={imagePath}
-          alt={`Screenshot for ${DEVICE_TYPE_LABELS[screen.device_type]}`}
+          alt={`Screenshot for screen ${screen.position + 1}`}
           fill
           className="object-contain"
           unoptimized
         />
       </div>
       <CardContent className="p-4 space-y-2">
-        <div className="flex items-center justify-between">
-          <Badge variant="secondary">
-            {DEVICE_TYPE_LABELS[screen.device_type]}
-          </Badge>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap gap-1">
+            {screen.variants.map((variant) => (
+              <Badge key={variant.id} variant="secondary">
+                {DEVICE_TYPE_LABELS[variant.device_type]}
+              </Badge>
+            ))}
+          </div>
           {onDelete && (
             <Button
               variant="destructive"

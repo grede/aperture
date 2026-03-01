@@ -6,6 +6,7 @@ import { mkdir, writeFile, readFile, unlink, rm } from 'fs/promises';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
 import { ensureWebEnvLoaded } from './env';
+import type { DeviceType } from '@/types';
 
 ensureWebEnvLoaded();
 
@@ -42,12 +43,14 @@ function sanitizeFilename(filename: string): string {
 export async function saveUpload(
   appId: number,
   screenId: number,
-  buffer: Buffer
+  buffer: Buffer,
+  deviceType?: DeviceType
 ): Promise<string> {
   const dir = join(process.cwd(), UPLOADS_DIR, appId.toString());
   await ensureDir(dir);
 
-  const filename = `${screenId}.png`;
+  const deviceToken = deviceType ? `-${sanitizeFilename(deviceType)}` : '';
+  const filename = `${screenId}${deviceToken}.png`;
   const filePath = join(dir, filename);
 
   await writeFile(filePath, buffer);
@@ -108,6 +111,16 @@ export async function readUpload(
 }
 
 /**
+ * Read an uploaded screenshot by its relative path
+ * @param relativePath - Relative path from uploads directory
+ * @returns Image buffer
+ */
+export async function readUploadByPath(relativePath: string): Promise<Buffer> {
+  const filePath = join(process.cwd(), UPLOADS_DIR, relativePath);
+  return readFile(filePath);
+}
+
+/**
  * Delete an uploaded screenshot
  * @param appId - App ID
  * @param screenId - Screen ID
@@ -152,7 +165,8 @@ export async function saveGeneration(
   generationId: number,
   locale: string,
   screenId: number,
-  buffer: Buffer
+  buffer: Buffer,
+  deviceType?: DeviceType
 ): Promise<string> {
   const dir = join(
     process.cwd(),
@@ -162,7 +176,8 @@ export async function saveGeneration(
   );
   await ensureDir(dir);
 
-  const filename = `${screenId}.png`;
+  const deviceToken = deviceType ? `-${sanitizeFilename(deviceType)}` : '';
+  const filename = `${screenId}${deviceToken}.png`;
   const filePath = join(dir, filename);
 
   await writeFile(filePath, buffer);

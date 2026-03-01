@@ -4,6 +4,7 @@ import { ensureWebEnvLoaded } from './env';
 import type {
   App,
   Screen,
+  ScreenVariant,
   Copy,
   Generation,
   GeneratedScreenshot,
@@ -105,6 +106,56 @@ function getNextScreenPosition(appId: number): number {
   return (result.max_pos ?? -1) + 1;
 }
 
+type ScreenRow = Omit<Screen, 'variants'>;
+
+function buildFallbackVariant(screen: ScreenRow): ScreenVariant {
+  return {
+    id: -screen.id,
+    screen_id: screen.id,
+    device_type: screen.device_type,
+    screenshot_path: screen.screenshot_path,
+    created_at: screen.created_at,
+  };
+}
+
+function getScreenVariantsByScreenIds(screenIds: number[]): Map<number, ScreenVariant[]> {
+  const variantsByScreenId = new Map<number, ScreenVariant[]>();
+  if (screenIds.length === 0) {
+    return variantsByScreenId;
+  }
+
+  const db = getDb();
+  const placeholders = screenIds.map(() => '?').join(', ');
+  const stmt = db.prepare(
+    `SELECT * FROM screen_variants WHERE screen_id IN (${placeholders}) ORDER BY created_at ASC, id ASC`
+  );
+  const variants = stmt.all(...screenIds) as ScreenVariant[];
+  for (const variant of variants) {
+    const existing = variantsByScreenId.get(variant.screen_id) || [];
+    existing.push(variant);
+    variantsByScreenId.set(variant.screen_id, existing);
+  }
+
+  return variantsByScreenId;
+}
+
+function withScreenVariants(screens: ScreenRow[]): Screen[] {
+  const variantsByScreenId = getScreenVariantsByScreenIds(screens.map((screen) => screen.id));
+
+  return screens.map((screen) => {
+    const variants = variantsByScreenId.get(screen.id) || [];
+    const resolvedVariants =
+      variants.length > 0
+        ? variants
+        : [buildFallbackVariant(screen)];
+
+    return {
+      ...screen,
+      variants: resolvedVariants,
+    };
+  });
+}
+
 export function createScreen(appId: number, screenshotPath: string, deviceType: DeviceType, position?: number): Screen {
   const db = getDb();
   const pos = position ?? getNextScreenPosition(appId);
@@ -116,20 +167,66 @@ export function createScreen(appId: number, screenshotPath: string, deviceType: 
 export function getScreenById(id: number): Screen | null {
   const db = getDb();
   const stmt = db.prepare('SELECT * FROM screens WHERE id = ?');
-  return (stmt.get(id) as Screen | undefined) || null;
+  const row = stmt.get(id) as ScreenRow | undefined;
+  if (!row) return null;
+  return withScreenVariants([row])[0];
 }
 
 export function getScreensByAppId(appId: number): Screen[] {
   const db = getDb();
   const stmt = db.prepare('SELECT * FROM screens WHERE app_id = ? ORDER BY position ASC');
-  return stmt.all(appId) as Screen[];
+  const rows = stmt.all(appId) as ScreenRow[];
+  return withScreenVariants(rows);
+}
+
+export function createScreenVariant(
+  screenId: number,
+  deviceType: DeviceType,
+  screenshotPath: string
+): ScreenVariant {
+  const db = getDb();
+  const stmt = db.prepare(
+    'INSERT INTO screen_variants (screen_id, device_type, screenshot_path) VALUES (?, ?, ?)'
+  );
+  const result = stmt.run(screenId, deviceType, screenshotPath);
+  return getScreenVariantById(result.lastInsertRowid as number)!;
+}
+
+export function getScreenVariantById(id: number): ScreenVariant | null {
+  const db = getDb();
+  const stmt = db.prepare('SELECT * FROM screen_variants WHERE id = ?');
+  return (stmt.get(id) as ScreenVariant | undefined) || null;
+}
+
+export function getScreenVariantsByScreenId(screenId: number): ScreenVariant[] {
+  const db = getDb();
+  const stmt = db.prepare(
+    'SELECT * FROM screen_variants WHERE screen_id = ? ORDER BY created_at ASC, id ASC'
+  );
+  return stmt.all(screenId) as ScreenVariant[];
+}
+
+export function getScreenVariantByScreenIdAndDeviceType(
+  screenId: number,
+  deviceType: DeviceType
+): ScreenVariant | null {
+  const db = getDb();
+  const stmt = db.prepare('SELECT * FROM screen_variants WHERE screen_id = ? AND device_type = ?');
+  return (stmt.get(screenId, deviceType) as ScreenVariant | undefined) || null;
 }
 
 export function updateScreen(id: number, updates: { deviceType?: DeviceType; position?: number }): Screen | null {
   const db = getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  if (updates.deviceType !== undefined) { fields.push('device_type = ?'); values.push(updates.deviceType); }
+  if (updates.deviceType !== undefined) {
+    const variant = getScreenVariantByScreenIdAndDeviceType(id, updates.deviceType);
+    if (!variant) {
+      return null;
+    }
+    fields.push('device_type = ?', 'screenshot_path = ?');
+    values.push(updates.deviceType, variant.screenshot_path);
+  }
   if (updates.position !== undefined) { fields.push('position = ?'); values.push(updates.position); }
   if (fields.length === 0) return getScreenById(id);
   values.push(id);
@@ -294,10 +391,18 @@ export function getGenerationWithScreenshots(id: number): GenerationWithScreensh
   return { ...generation, screenshots };
 }
 
-export function createGeneratedScreenshot(generationId: number, screenId: number, locale: string, outputPath: string): GeneratedScreenshot {
+export function createGeneratedScreenshot(
+  generationId: number,
+  screenId: number,
+  locale: string,
+  outputPath: string,
+  deviceType: DeviceType | null = null
+): GeneratedScreenshot {
   const db = getDb();
-  const stmt = db.prepare('INSERT INTO generated_screenshots (generation_id, screen_id, locale, output_path) VALUES (?, ?, ?, ?)');
-  const result = stmt.run(generationId, screenId, locale, outputPath);
+  const stmt = db.prepare(
+    'INSERT INTO generated_screenshots (generation_id, screen_id, locale, device_type, output_path) VALUES (?, ?, ?, ?, ?)'
+  );
+  const result = stmt.run(generationId, screenId, locale, deviceType, outputPath);
   return getGeneratedScreenshotById(result.lastInsertRowid as number)!;
 }
 
