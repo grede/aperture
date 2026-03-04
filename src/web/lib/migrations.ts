@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3';
 /**
  * Database schema version
  */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /**
  * Create all database tables
@@ -43,6 +43,21 @@ function createTables(db: Database.Database): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (screen_id) REFERENCES screens(id) ON DELETE CASCADE,
       UNIQUE(screen_id, device_type)
+    );
+  `);
+
+  // Localized screen variants table: Locale-specific screenshot versions per screen + device
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS screen_localized_variants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      screen_id INTEGER NOT NULL,
+      locale TEXT NOT NULL,
+      device_type TEXT NOT NULL CHECK(device_type IN ('iPhone', 'iPad', 'Android-phone', 'Android-tablet')),
+      screenshot_path TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (screen_id) REFERENCES screens(id) ON DELETE CASCADE,
+      UNIQUE(screen_id, locale, device_type)
     );
   `);
 
@@ -115,9 +130,17 @@ function createTables(db: Database.Database): void {
  */
 function createIndexes(db: Database.Database): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_screens_app_id ON screens(app_id);');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_screen_variants_screen_id ON screen_variants(screen_id);');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_screen_variants_screen_id ON screen_variants(screen_id);'
+  );
   db.exec(
     'CREATE INDEX IF NOT EXISTS idx_screen_variants_device_type ON screen_variants(device_type);'
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_screen_localized_variants_screen_id ON screen_localized_variants(screen_id);'
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_screen_localized_variants_locale ON screen_localized_variants(locale);'
   );
   db.exec('CREATE INDEX IF NOT EXISTS idx_copies_screen_id ON copies(screen_id);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_copies_locale ON copies(locale);');
@@ -181,6 +204,29 @@ function migrateToV3(db: Database.Database): void {
   }
 }
 
+function migrateToV4(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS screen_localized_variants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      screen_id INTEGER NOT NULL,
+      locale TEXT NOT NULL,
+      device_type TEXT NOT NULL CHECK(device_type IN ('iPhone', 'iPad', 'Android-phone', 'Android-tablet')),
+      screenshot_path TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (screen_id) REFERENCES screens(id) ON DELETE CASCADE,
+      UNIQUE(screen_id, locale, device_type)
+    );
+  `);
+
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_screen_localized_variants_screen_id ON screen_localized_variants(screen_id);'
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_screen_localized_variants_locale ON screen_localized_variants(locale);'
+  );
+}
+
 /**
  * Get current schema version
  */
@@ -227,6 +273,9 @@ export function migrate(db: Database.Database): void {
     if (currentVersion < 3) {
       migrateToV3(db);
     }
+    if (currentVersion < 4) {
+      migrateToV4(db);
+    }
 
     // Update schema version
     setSchemaVersion(db, SCHEMA_VERSION);
@@ -245,6 +294,7 @@ export function resetDatabase(db: Database.Database): void {
     'generation_presets',
     'copies',
     'screen_variants',
+    'screen_localized_variants',
     'screens',
     'apps',
     'schema_version',

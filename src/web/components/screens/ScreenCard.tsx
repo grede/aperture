@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,13 +38,19 @@ export function ScreenCard({ screen, onDelete }: ScreenCardProps) {
                 {DEVICE_TYPE_LABELS[variant.device_type]}
               </Badge>
             ))}
+            {screen.localized_variants.length > 0 && (
+              <Badge variant="outline">{screen.localized_variants.length} localized</Badge>
+            )}
           </div>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <Link href={`/apps/${screen.app_id}/screens/${screen.id}`}>
+            <Button size="sm" variant="outline">
+              Open
+            </Button>
+          </Link>
           {onDelete && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={onDelete}
-            >
+            <Button variant="destructive" size="sm" onClick={onDelete}>
               Delete
             </Button>
           )}

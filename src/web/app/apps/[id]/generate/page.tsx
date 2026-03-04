@@ -34,7 +34,6 @@ import type {
   TemplateFontFamily,
   TemplateBackground,
   Screen,
-  ScreenVariant,
   TemplateStyle,
 } from '@/types';
 
@@ -147,8 +146,33 @@ function collectSavedLocales(copies: CopiesByScreenAndLocale): string[] {
   return Array.from(localeSet).sort((a, b) => localeLabel(a).localeCompare(localeLabel(b)));
 }
 
-function findVariantForDevice(screen: Screen, deviceType: DeviceType): ScreenVariant | null {
+type VariantLike = { device_type: DeviceType; screenshot_path: string };
+
+function findVariantForDevice(screen: Screen, deviceType: DeviceType): VariantLike | null {
   return screen.variants.find((variant) => variant.device_type === deviceType) || null;
+}
+
+function findLocalizedVariantForDeviceAndLocale(
+  screen: Screen,
+  deviceType: DeviceType,
+  locale: string
+): VariantLike | null {
+  return (
+    screen.localized_variants.find(
+      (variant) => variant.device_type === deviceType && variant.locale === locale
+    ) || null
+  );
+}
+
+function findPreferredVariantForDeviceAndLocale(
+  screen: Screen,
+  deviceType: DeviceType,
+  locale: string
+): VariantLike | null {
+  return (
+    findLocalizedVariantForDeviceAndLocale(screen, deviceType, locale) ||
+    findVariantForDevice(screen, deviceType)
+  );
 }
 
 function screenHasDeviceVariant(screen: Screen, deviceType: DeviceType): boolean {
@@ -295,9 +319,7 @@ export default function GeneratePage() {
     if (!app) return [];
     return Array.from(
       new Set(
-        app.screens.flatMap((screen) =>
-          screen.variants.map((variant) => variant.device_type)
-        )
+        app.screens.flatMap((screen) => screen.variants.map((variant) => variant.device_type))
       )
     ) as DeviceType[];
   }, [app]);
@@ -313,8 +335,8 @@ export default function GeneratePage() {
     if (!previewScreen || !previewDevice) {
       return null;
     }
-    return findVariantForDevice(previewScreen, previewDevice);
-  }, [previewScreen, previewDevice]);
+    return findPreferredVariantForDeviceAndLocale(previewScreen, previewDevice, previewLocale);
+  }, [previewLocale, previewScreen, previewDevice]);
   const previewLocaleOptions = useMemo(() => {
     if (!previewScreen) {
       return [];
@@ -792,9 +814,7 @@ export default function GeneratePage() {
       return;
     }
 
-    const loadedPreset = generationPresets.find(
-      (preset) => preset.id === Number(selectedPresetId)
-    );
+    const loadedPreset = generationPresets.find((preset) => preset.id === Number(selectedPresetId));
     const trimmedPresetName = presetName.trim();
     const targetPresetName = trimmedPresetName || loadedPreset?.name || '';
     if (!targetPresetName) {
@@ -835,9 +855,7 @@ export default function GeneratePage() {
       setSelectedPresetId(String(savedPreset.id));
       setPresetName(savedPreset.name);
       setPresetStatusMessage(
-        wasUpdatingLoadedPreset
-          ? `Updated "${savedPreset.name}".`
-          : `Saved "${savedPreset.name}".`
+        wasUpdatingLoadedPreset ? `Updated "${savedPreset.name}".` : `Saved "${savedPreset.name}".`
       );
     } catch (saveError) {
       setPresetError(saveError instanceof Error ? saveError.message : 'Failed to save template');
@@ -956,10 +974,16 @@ export default function GeneratePage() {
     }
 
     const suggestionDevice = selectedDevices[0];
+    const suggestionLocale = selectedLocales[0] || previewLocale || 'en';
     const suggestionScreen =
-      app.screens.find((screen) => screenHasDeviceVariant(screen, suggestionDevice)) || app.screens[0];
+      app.screens.find((screen) => screenHasDeviceVariant(screen, suggestionDevice)) ||
+      app.screens[0];
     const suggestionVariant = suggestionScreen
-      ? findVariantForDevice(suggestionScreen, suggestionDevice) || suggestionScreen.variants[0]
+      ? findPreferredVariantForDeviceAndLocale(
+          suggestionScreen,
+          suggestionDevice,
+          suggestionLocale
+        ) || suggestionScreen.variants[0]
       : null;
 
     if (!suggestionScreen || !suggestionVariant) {
@@ -1169,9 +1193,10 @@ export default function GeneratePage() {
                     {presetSaving
                       ? 'Saving...'
                       : selectedPreset &&
-                        (presetName.trim().length === 0 || presetName.trim() === selectedPreset.name)
-                      ? 'Update Template'
-                      : 'Save Template'}
+                          (presetName.trim().length === 0 ||
+                            presetName.trim() === selectedPreset.name)
+                        ? 'Update Template'
+                        : 'Save Template'}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -1451,7 +1476,9 @@ export default function GeneratePage() {
                         type="button"
                         onClick={() => selectGradientPreset(preset.from, preset.to)}
                         className={`overflow-hidden rounded-lg border text-left transition-colors ${
-                          isSelected ? 'border-primary bg-primary/5' : 'border-input hover:bg-accent'
+                          isSelected
+                            ? 'border-primary bg-primary/5'
+                            : 'border-input hover:bg-accent'
                         }`}
                       >
                         <div
@@ -1622,10 +1649,7 @@ export default function GeneratePage() {
               <p className="font-bold leading-tight" style={{ fontSize: `${fontSize}px` }}>
                 Sample Title
               </p>
-              <p
-                className="mt-2 opacity-90"
-                style={{ fontSize: `${subtitleFontSize}px` }}
-              >
+              <p className="mt-2 opacity-90" style={{ fontSize: `${subtitleFontSize}px` }}>
                 Sample subtitle preview
               </p>
             </div>
@@ -1677,9 +1701,7 @@ export default function GeneratePage() {
             {!previewImage && previewLoading && (
               <p className="text-sm text-muted-foreground">Rendering preview...</p>
             )}
-            {previewError && (
-              <p className="text-sm text-destructive">{previewError}</p>
-            )}
+            {previewError && <p className="text-sm text-destructive">{previewError}</p>}
           </CardContent>
         </Card>
 
@@ -1687,8 +1709,8 @@ export default function GeneratePage() {
           <CardContent className="pt-6">
             <div className="text-center space-y-4">
               <div className="text-sm text-muted-foreground">
-                {selectedScreenVariantCount} selected screen-device variant(s) × {selectedLocales.length} locale(s) ={' '}
-                {estimatedOutputCount} output image(s)
+                {selectedScreenVariantCount} selected screen-device variant(s) ×{' '}
+                {selectedLocales.length} locale(s) = {estimatedOutputCount} output image(s)
               </div>
               <Button
                 size="lg"

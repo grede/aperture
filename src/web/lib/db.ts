@@ -5,6 +5,7 @@ import type {
   App,
   Screen,
   ScreenVariant,
+  ScreenLocalizedVariant,
   Copy,
   Generation,
   GeneratedScreenshot,
@@ -71,12 +72,21 @@ export function getAllApps(): App[] {
   return stmt.all() as App[];
 }
 
-export function updateApp(id: number, updates: { name?: string; description?: string }): App | null {
+export function updateApp(
+  id: number,
+  updates: { name?: string; description?: string }
+): App | null {
   const db = getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name); }
-  if (updates.description !== undefined) { fields.push('description = ?'); values.push(updates.description); }
+  if (updates.name !== undefined) {
+    fields.push('name = ?');
+    values.push(updates.name);
+  }
+  if (updates.description !== undefined) {
+    fields.push('description = ?');
+    values.push(updates.description);
+  }
   if (fields.length === 0) return getAppById(id);
   fields.push('updated_at = CURRENT_TIMESTAMP');
   values.push(id);
@@ -106,7 +116,7 @@ function getNextScreenPosition(appId: number): number {
   return (result.max_pos ?? -1) + 1;
 }
 
-type ScreenRow = Omit<Screen, 'variants'>;
+type ScreenRow = Omit<Screen, 'variants' | 'localized_variants'>;
 
 function buildFallbackVariant(screen: ScreenRow): ScreenVariant {
   return {
@@ -139,27 +149,61 @@ function getScreenVariantsByScreenIds(screenIds: number[]): Map<number, ScreenVa
   return variantsByScreenId;
 }
 
+function getScreenLocalizedVariantsByScreenIds(
+  screenIds: number[]
+): Map<number, ScreenLocalizedVariant[]> {
+  const localizedVariantsByScreenId = new Map<number, ScreenLocalizedVariant[]>();
+  if (screenIds.length === 0) {
+    return localizedVariantsByScreenId;
+  }
+
+  const db = getDb();
+  const placeholders = screenIds.map(() => '?').join(', ');
+  const stmt = db.prepare(
+    `SELECT *
+     FROM screen_localized_variants
+     WHERE screen_id IN (${placeholders})
+     ORDER BY locale ASC, created_at ASC, id ASC`
+  );
+  const localizedVariants = stmt.all(...screenIds) as ScreenLocalizedVariant[];
+  for (const localizedVariant of localizedVariants) {
+    const existing = localizedVariantsByScreenId.get(localizedVariant.screen_id) || [];
+    existing.push(localizedVariant);
+    localizedVariantsByScreenId.set(localizedVariant.screen_id, existing);
+  }
+
+  return localizedVariantsByScreenId;
+}
+
 function withScreenVariants(screens: ScreenRow[]): Screen[] {
   const variantsByScreenId = getScreenVariantsByScreenIds(screens.map((screen) => screen.id));
+  const localizedVariantsByScreenId = getScreenLocalizedVariantsByScreenIds(
+    screens.map((screen) => screen.id)
+  );
 
   return screens.map((screen) => {
     const variants = variantsByScreenId.get(screen.id) || [];
-    const resolvedVariants =
-      variants.length > 0
-        ? variants
-        : [buildFallbackVariant(screen)];
+    const resolvedVariants = variants.length > 0 ? variants : [buildFallbackVariant(screen)];
 
     return {
       ...screen,
       variants: resolvedVariants,
+      localized_variants: localizedVariantsByScreenId.get(screen.id) || [],
     };
   });
 }
 
-export function createScreen(appId: number, screenshotPath: string, deviceType: DeviceType, position?: number): Screen {
+export function createScreen(
+  appId: number,
+  screenshotPath: string,
+  deviceType: DeviceType,
+  position?: number
+): Screen {
   const db = getDb();
   const pos = position ?? getNextScreenPosition(appId);
-  const stmt = db.prepare('INSERT INTO screens (app_id, screenshot_path, device_type, position) VALUES (?, ?, ?, ?)');
+  const stmt = db.prepare(
+    'INSERT INTO screens (app_id, screenshot_path, device_type, position) VALUES (?, ?, ?, ?)'
+  );
   const result = stmt.run(appId, screenshotPath, deviceType, pos);
   return getScreenById(result.lastInsertRowid as number)!;
 }
@@ -206,6 +250,62 @@ export function getScreenVariantsByScreenId(screenId: number): ScreenVariant[] {
   return stmt.all(screenId) as ScreenVariant[];
 }
 
+export function getScreenLocalizedVariantById(id: number): ScreenLocalizedVariant | null {
+  const db = getDb();
+  const stmt = db.prepare('SELECT * FROM screen_localized_variants WHERE id = ?');
+  return (stmt.get(id) as ScreenLocalizedVariant | undefined) || null;
+}
+
+export function getScreenLocalizedVariantsByScreenId(screenId: number): ScreenLocalizedVariant[] {
+  const db = getDb();
+  const stmt = db.prepare(
+    `SELECT *
+     FROM screen_localized_variants
+     WHERE screen_id = ?
+     ORDER BY locale ASC, created_at ASC, id ASC`
+  );
+  return stmt.all(screenId) as ScreenLocalizedVariant[];
+}
+
+export function getScreenLocalizedVariantByScreenIdLocaleAndDeviceType(
+  screenId: number,
+  locale: string,
+  deviceType: DeviceType
+): ScreenLocalizedVariant | null {
+  const db = getDb();
+  const stmt = db.prepare(
+    `SELECT *
+     FROM screen_localized_variants
+     WHERE screen_id = ? AND locale = ? AND device_type = ?`
+  );
+  return (stmt.get(screenId, locale, deviceType) as ScreenLocalizedVariant | undefined) || null;
+}
+
+export function upsertScreenLocalizedVariant(
+  screenId: number,
+  locale: string,
+  deviceType: DeviceType,
+  screenshotPath: string
+): ScreenLocalizedVariant {
+  const db = getDb();
+  const stmt = db.prepare(`
+    INSERT INTO screen_localized_variants (screen_id, locale, device_type, screenshot_path)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(screen_id, locale, device_type) DO UPDATE SET
+      screenshot_path = excluded.screenshot_path,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+  stmt.run(screenId, locale, deviceType, screenshotPath);
+  return getScreenLocalizedVariantByScreenIdLocaleAndDeviceType(screenId, locale, deviceType)!;
+}
+
+export function deleteScreenLocalizedVariant(id: number): boolean {
+  const db = getDb();
+  const stmt = db.prepare('DELETE FROM screen_localized_variants WHERE id = ?');
+  const result = stmt.run(id);
+  return result.changes > 0;
+}
+
 export function getScreenVariantByScreenIdAndDeviceType(
   screenId: number,
   deviceType: DeviceType
@@ -215,7 +315,10 @@ export function getScreenVariantByScreenIdAndDeviceType(
   return (stmt.get(screenId, deviceType) as ScreenVariant | undefined) || null;
 }
 
-export function updateScreen(id: number, updates: { deviceType?: DeviceType; position?: number }): Screen | null {
+export function updateScreen(
+  id: number,
+  updates: { deviceType?: DeviceType; position?: number }
+): Screen | null {
   const db = getDb();
   const fields: string[] = [];
   const values: any[] = [];
@@ -227,7 +330,10 @@ export function updateScreen(id: number, updates: { deviceType?: DeviceType; pos
     fields.push('device_type = ?', 'screenshot_path = ?');
     values.push(updates.deviceType, variant.screenshot_path);
   }
-  if (updates.position !== undefined) { fields.push('position = ?'); values.push(updates.position); }
+  if (updates.position !== undefined) {
+    fields.push('position = ?');
+    values.push(updates.position);
+  }
   if (fields.length === 0) return getScreenById(id);
   values.push(id);
   const stmt = db.prepare(`UPDATE screens SET ${fields.join(', ')} WHERE id = ?`);
@@ -242,7 +348,12 @@ export function deleteScreen(id: number): boolean {
   return result.changes > 0;
 }
 
-export function upsertCopy(screenId: number, locale: string, title: string, subtitle: string | null): Copy {
+export function upsertCopy(
+  screenId: number,
+  locale: string,
+  title: string,
+  subtitle: string | null
+): Copy {
   const db = getDb();
   const stmt = db.prepare(`
     INSERT INTO copies (screen_id, locale, title, subtitle)
@@ -306,7 +417,9 @@ export function deleteCopiesByAppLocale(appId: number, locale: string): number {
 
 export function createGeneration(appId: number, config: GenerationConfig): Generation {
   const db = getDb();
-  const stmt = db.prepare('INSERT INTO generations (app_id, config, status, progress) VALUES (?, ?, ?, ?)');
+  const stmt = db.prepare(
+    'INSERT INTO generations (app_id, config, status, progress) VALUES (?, ?, ?, ?)'
+  );
   const result = stmt.run(appId, JSON.stringify(config), 'pending', 0);
   return getGenerationById(result.lastInsertRowid as number)!;
 }
@@ -371,10 +484,18 @@ export function getAllGenerationPresets(): GenerationPreset[] {
   return rows.map((row) => ({ ...row, config: JSON.parse(row.config) }));
 }
 
-export function updateGenerationStatus(id: number, status: GenerationStatus, progress: number, error?: string): void {
+export function updateGenerationStatus(
+  id: number,
+  status: GenerationStatus,
+  progress: number,
+  error?: string
+): void {
   const db = getDb();
-  const completedAt = status === 'completed' || status === 'failed' ? new Date().toISOString() : null;
-  const stmt = db.prepare(`UPDATE generations SET status = ?, progress = ?, error = ?, completed_at = ? WHERE id = ?`);
+  const completedAt =
+    status === 'completed' || status === 'failed' ? new Date().toISOString() : null;
+  const stmt = db.prepare(
+    `UPDATE generations SET status = ?, progress = ?, error = ?, completed_at = ? WHERE id = ?`
+  );
   stmt.run(status, progress, error || null, completedAt, id);
 }
 
@@ -414,7 +535,9 @@ export function getGeneratedScreenshotById(id: number): GeneratedScreenshot | nu
 
 export function getGeneratedScreenshotsByGenerationId(generationId: number): GeneratedScreenshot[] {
   const db = getDb();
-  const stmt = db.prepare('SELECT * FROM generated_screenshots WHERE generation_id = ? ORDER BY created_at ASC');
+  const stmt = db.prepare(
+    'SELECT * FROM generated_screenshots WHERE generation_id = ? ORDER BY created_at ASC'
+  );
   return stmt.all(generationId) as GeneratedScreenshot[];
 }
 

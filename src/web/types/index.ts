@@ -127,6 +127,19 @@ export interface ScreenVariant {
 }
 
 /**
+ * Localized screenshot variant for a screen + locale + device
+ */
+export interface ScreenLocalizedVariant {
+  id: number;
+  screen_id: number;
+  locale: string;
+  device_type: DeviceType;
+  screenshot_path: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * Screen entity (logical screen within an app)
  */
 export interface Screen {
@@ -138,6 +151,7 @@ export interface Screen {
   position: number;
   created_at: string;
   variants: ScreenVariant[];
+  localized_variants: ScreenLocalizedVariant[];
 }
 
 /**

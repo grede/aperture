@@ -22,6 +22,19 @@ type ScreenDeviceVariantTask = {
   variant: ScreenVariant;
 };
 
+function resolveLocalizedOrBaseVariant(
+  screen: Screen,
+  deviceType: DeviceType,
+  locale: string,
+  baseVariant: ScreenVariant
+): { screenshot_path: string } {
+  const localizedVariant = screen.localized_variants.find(
+    (candidate) => candidate.device_type === deviceType && candidate.locale === locale
+  );
+
+  return localizedVariant || baseVariant;
+}
+
 /**
  * Generation service for orchestrating screenshot generation
  */
@@ -111,15 +124,19 @@ export class GenerationService {
             }
 
             // Load original screenshot
-            const screenshotBuffer = await readUploadByPath(variant.screenshot_path);
+            const sourceVariant = resolveLocalizedOrBaseVariant(
+              screen,
+              deviceType,
+              locale,
+              variant
+            );
+            const screenshotBuffer = await readUploadByPath(sourceVariant.screenshot_path);
 
             // Map device type to template device type
             const templateDeviceType = DEVICE_TYPE_TO_TEMPLATE[deviceType];
             const resolvedFrameMode = frame_modes?.[deviceType] ?? frame_mode ?? 'minimal';
             const resolvedFrameAssetFile =
-              resolvedFrameMode === 'realistic'
-                ? frame_asset_files?.[deviceType]
-                : undefined;
+              resolvedFrameMode === 'realistic' ? frame_asset_files?.[deviceType] : undefined;
 
             // Generate composited image
             const outputBuffer = await this.templateService.generateScreenshot(

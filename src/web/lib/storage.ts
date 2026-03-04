@@ -60,18 +60,40 @@ export async function saveUpload(
 }
 
 /**
+ * Save a localized screenshot upload
+ * @param appId - App ID
+ * @param screenId - Screen ID
+ * @param locale - Locale code
+ * @param deviceType - Device type
+ * @param buffer - Image buffer
+ * @returns Relative path to saved file
+ */
+export async function saveLocalizedUpload(
+  appId: number,
+  screenId: number,
+  locale: string,
+  deviceType: DeviceType,
+  buffer: Buffer
+): Promise<string> {
+  const dir = join(process.cwd(), UPLOADS_DIR, appId.toString());
+  await ensureDir(dir);
+
+  const filename = `${screenId}-${sanitizeFilename(deviceType)}-${sanitizeFilename(locale)}-${Date.now()}.png`;
+  const filePath = join(dir, filename);
+
+  await writeFile(filePath, buffer);
+
+  return `${appId}/${filename}`;
+}
+
+/**
  * Save a user-uploaded template background image
  * @param appId - App ID
  * @param buffer - PNG image buffer
  * @returns Relative path to saved file (within uploads)
  */
 export async function saveTemplateBackground(appId: number, buffer: Buffer): Promise<string> {
-  const dir = join(
-    process.cwd(),
-    UPLOADS_DIR,
-    TEMPLATE_BACKGROUNDS_PREFIX,
-    appId.toString()
-  );
+  const dir = join(process.cwd(), UPLOADS_DIR, TEMPLATE_BACKGROUNDS_PREFIX, appId.toString());
   await ensureDir(dir);
 
   const filename = `${Date.now()}.png`;
@@ -97,16 +119,8 @@ export async function readTemplateBackground(relativePath: string): Promise<Buff
  * @param screenId - Screen ID
  * @returns Image buffer
  */
-export async function readUpload(
-  appId: number,
-  screenId: number
-): Promise<Buffer> {
-  const filePath = join(
-    process.cwd(),
-    UPLOADS_DIR,
-    appId.toString(),
-    `${screenId}.png`
-  );
+export async function readUpload(appId: number, screenId: number): Promise<Buffer> {
+  const filePath = join(process.cwd(), UPLOADS_DIR, appId.toString(), `${screenId}.png`);
   return readFile(filePath);
 }
 
@@ -125,16 +139,8 @@ export async function readUploadByPath(relativePath: string): Promise<Buffer> {
  * @param appId - App ID
  * @param screenId - Screen ID
  */
-export async function deleteUpload(
-  appId: number,
-  screenId: number
-): Promise<void> {
-  const filePath = join(
-    process.cwd(),
-    UPLOADS_DIR,
-    appId.toString(),
-    `${screenId}.png`
-  );
+export async function deleteUpload(appId: number, screenId: number): Promise<void> {
+  const filePath = join(process.cwd(), UPLOADS_DIR, appId.toString(), `${screenId}.png`);
 
   if (existsSync(filePath)) {
     await unlink(filePath);
@@ -168,12 +174,7 @@ export async function saveGeneration(
   buffer: Buffer,
   deviceType?: DeviceType
 ): Promise<string> {
-  const dir = join(
-    process.cwd(),
-    GENERATIONS_DIR,
-    generationId.toString(),
-    locale
-  );
+  const dir = join(process.cwd(), GENERATIONS_DIR, generationId.toString(), locale);
   await ensureDir(dir);
 
   const deviceToken = deviceType ? `-${sanitizeFilename(deviceType)}` : '';
@@ -212,9 +213,7 @@ export async function deleteGeneration(relativePath: string): Promise<void> {
  * Delete all generated screenshots for a generation
  * @param generationId - Generation ID
  */
-export async function deleteGenerationOutputs(
-  generationId: number
-): Promise<void> {
+export async function deleteGenerationOutputs(generationId: number): Promise<void> {
   const dirPath = join(process.cwd(), GENERATIONS_DIR, generationId.toString());
 
   if (existsSync(dirPath)) {
@@ -247,12 +246,7 @@ export function getGenerationPath(relativePath: string): string {
  * @returns True if file exists
  */
 export function uploadExists(appId: number, screenId: number): boolean {
-  const filePath = join(
-    process.cwd(),
-    UPLOADS_DIR,
-    appId.toString(),
-    `${screenId}.png`
-  );
+  const filePath = join(process.cwd(), UPLOADS_DIR, appId.toString(), `${screenId}.png`);
   return existsSync(filePath);
 }
 

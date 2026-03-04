@@ -1,5 +1,6 @@
 /**
  * Individual screen API routes
+ * GET /api/screens/:id - Get screen details
  * PUT /api/screens/:id - Update screen metadata
  * DELETE /api/screens/:id - Delete screen
  */
@@ -16,13 +17,30 @@ import {
 } from '@/lib/api-helpers';
 
 /**
+ * GET /api/screens/:id
+ * Get screen details with device and localized variants
+ */
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const routeParams = await context.params;
+    const id = getIdFromParams(routeParams);
+    const screen = getScreenById(id);
+
+    if (!screen) {
+      return errorResponse('Screen not found', 404);
+    }
+
+    return successResponse(screen);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+/**
  * PUT /api/screens/:id
  * Update screen metadata (device type, position)
  */
-export async function PUT(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const routeParams = await context.params;
     const id = getIdFromParams(routeParams);
@@ -48,10 +66,7 @@ export async function PUT(
  * DELETE /api/screens/:id
  * Delete screen (cascades to copies, generated screenshots)
  */
-export async function DELETE(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const routeParams = await context.params;
     const id = getIdFromParams(routeParams);
