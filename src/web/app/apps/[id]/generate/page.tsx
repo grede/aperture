@@ -285,6 +285,7 @@ export default function GeneratePage() {
   const [backgroundImagePath, setBackgroundImagePath] = useState<string | null>(null);
   const [backgroundImageUploading, setBackgroundImageUploading] = useState(false);
   const [backgroundImageError, setBackgroundImageError] = useState<string | null>(null);
+  const [includeText, setIncludeText] = useState(true);
   const [fontFamily, setFontFamily] = useState<TemplateFontFamily>('system');
   const [fontSize, setFontSize] = useState(52);
   const [subtitleFontSize, setSubtitleFontSize] = useState(29);
@@ -349,6 +350,12 @@ export default function GeneratePage() {
 
   const availableLocales = useMemo(() => collectSavedLocales(copies), [copies]);
   const templateBackground = useMemo<TemplateBackground | undefined>(() => {
+    if (backgroundMode === 'transparent') {
+      return {
+        mode: 'transparent',
+      };
+    }
+
     if (backgroundMode === 'solid') {
       return {
         mode: 'solid',
@@ -376,6 +383,15 @@ export default function GeneratePage() {
   }, [backgroundMode, solidColor, gradientFrom, gradientTo, backgroundImagePath]);
 
   const backgroundPreviewStyle = useMemo(() => {
+    if (backgroundMode === 'transparent') {
+      return {
+        backgroundColor: '#FFFFFF',
+        backgroundImage:
+          'linear-gradient(45deg, #E5E7EB 25%, transparent 25%), linear-gradient(-45deg, #E5E7EB 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #E5E7EB 75%), linear-gradient(-45deg, transparent 75%, #E5E7EB 75%)',
+        backgroundSize: '16px 16px',
+        backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+      };
+    }
     if (backgroundMode === 'solid') {
       return { backgroundColor: solidColor };
     }
@@ -424,7 +440,8 @@ export default function GeneratePage() {
       locales: selectedLocales,
       template_style: BACKGROUND_TEMPLATE_STYLE,
       template_background: templateBackground,
-      text_style: templateTextStyle,
+      include_text: includeText,
+      text_style: includeText ? templateTextStyle : undefined,
       frame_mode: 'minimal',
       frame_modes: selectedDeviceFrameModes,
       frame_asset_files:
@@ -434,6 +451,7 @@ export default function GeneratePage() {
     selectedDevices,
     selectedLocales,
     templateBackground,
+    includeText,
     templateTextStyle,
     frameModesByDevice,
     selectedFrameAssetFilesByDevice,
@@ -581,7 +599,7 @@ export default function GeneratePage() {
         copies[previewScreen.id]?.en ||
         copies[previewScreen.id]?.[previewLocaleOptions[0]];
 
-      if (!previewCopy) {
+      if (includeText && !previewCopy) {
         setPreviewError('Add at least one copy before generating preview.');
         setPreviewImage(null);
         setPreviewLoading(false);
@@ -620,10 +638,11 @@ export default function GeneratePage() {
             screenshot_base64: screenshotBase64,
             style: BACKGROUND_TEMPLATE_STYLE,
             template_background: templateBackground,
-            text_style: templateTextStyle,
+            include_text: includeText,
+            text_style: includeText ? templateTextStyle : undefined,
             device_type: previewDevice,
-            title: previewCopy.title,
-            subtitle: previewCopy.subtitle || '',
+            title: includeText ? previewCopy?.title || '' : '',
+            subtitle: includeText ? previewCopy?.subtitle || '' : '',
             frame_mode: previewFrameMode,
             frame_asset_file: previewFrameAssetFile,
           }),
@@ -665,6 +684,7 @@ export default function GeneratePage() {
     previewVariant,
     backgroundMode,
     templateBackground,
+    includeText,
     templateTextStyle,
     frameModesByDevice,
     selectedFrameAssetFilesByDevice,
@@ -750,12 +770,15 @@ export default function GeneratePage() {
     } else if (background?.mode === 'image') {
       setBackgroundMode('image');
       setBackgroundImagePath(background.image_path);
+    } else if (background?.mode === 'transparent') {
+      setBackgroundMode('transparent');
     } else {
       setBackgroundMode('solid');
       setSolidColor('#4A90E2');
     }
     setBackgroundImageError(null);
 
+    setIncludeText(config.include_text !== false);
     const textStyle = config.text_style;
     setFontFamily(textStyle?.font_family || 'system');
     updateFontSize(textStyle?.font_size ?? 52);
@@ -1353,7 +1376,14 @@ export default function GeneratePage() {
             <CardTitle>4. Choose Template Background</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid max-w-lg grid-cols-3 gap-2">
+            <div className="grid max-w-xl grid-cols-2 gap-2 sm:grid-cols-4">
+              <Button
+                type="button"
+                variant={backgroundMode === 'transparent' ? 'default' : 'outline'}
+                onClick={() => setTemplateBackgroundMode('transparent')}
+              >
+                No Background
+              </Button>
               <Button
                 type="button"
                 variant={backgroundMode === 'solid' ? 'default' : 'outline'}
@@ -1386,7 +1416,11 @@ export default function GeneratePage() {
               </div>
             )}
 
-            {backgroundMode === 'solid' ? (
+            {backgroundMode === 'transparent' ? (
+              <p className="text-sm text-muted-foreground">
+                Exported PNGs will keep a transparent background (alpha channel).
+              </p>
+            ) : backgroundMode === 'solid' ? (
               <div className="space-y-3">
                 <Label htmlFor="template-solid-color">Pick color</Label>
                 <div className="flex items-center gap-3">
@@ -1525,134 +1559,159 @@ export default function GeneratePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>5. Customize Text Style</CardTitle>
+            <CardTitle>5. Text Overlay</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2">
-                <Label htmlFor="template-font-family">Font</Label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      id="template-font-family"
-                      type="button"
-                      variant="outline"
-                      className="h-10 w-full justify-start text-left"
-                    >
-                      <p
-                        className="truncate text-sm font-medium"
-                        style={{ fontFamily: FONT_PREVIEW_STACKS[fontFamily] }}
-                      >
-                        {selectedFontLabel}
-                      </p>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    className="w-[340px] max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto p-1"
-                    align="start"
-                  >
-                    <DropdownMenuRadioGroup
-                      value={fontFamily}
-                      onValueChange={(value) => setFontFamily(value as TemplateFontFamily)}
-                    >
-                      {TEMPLATE_FONT_OPTIONS.map((font) => (
-                        <DropdownMenuRadioItem
-                          key={font.value}
-                          value={font.value}
-                          className="cursor-pointer py-2"
+            <div className="grid max-w-sm grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={includeText ? 'default' : 'outline'}
+                onClick={() => setIncludeText(true)}
+              >
+                Include Text
+              </Button>
+              <Button
+                type="button"
+                variant={includeText ? 'outline' : 'default'}
+                onClick={() => setIncludeText(false)}
+              >
+                No Text
+              </Button>
+            </div>
+
+            {includeText ? (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="template-font-family">Font</Label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          id="template-font-family"
+                          type="button"
+                          variant="outline"
+                          className="h-10 w-full justify-start text-left"
                         >
                           <p
                             className="truncate text-sm font-medium"
-                            style={{ fontFamily: FONT_PREVIEW_STACKS[font.value] }}
+                            style={{ fontFamily: FONT_PREVIEW_STACKS[fontFamily] }}
                           >
-                            {font.label}
+                            {selectedFontLabel}
                           </p>
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <p className="text-xs text-muted-foreground">
-                  Google font files are embedded via @fontsource for generated previews and final
-                  screenshots.
-                </p>
-              </div>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        className="w-[340px] max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto p-1"
+                        align="start"
+                      >
+                        <DropdownMenuRadioGroup
+                          value={fontFamily}
+                          onValueChange={(value) => setFontFamily(value as TemplateFontFamily)}
+                        >
+                          {TEMPLATE_FONT_OPTIONS.map((font) => (
+                            <DropdownMenuRadioItem
+                              key={font.value}
+                              value={font.value}
+                              className="cursor-pointer py-2"
+                            >
+                              <p
+                                className="truncate text-sm font-medium"
+                                style={{ fontFamily: FONT_PREVIEW_STACKS[font.value] }}
+                              >
+                                {font.label}
+                              </p>
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <p className="text-xs text-muted-foreground">
+                      Google font files are embedded via @fontsource for generated previews and
+                      final screenshots.
+                    </p>
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="template-font-size">Title size</Label>
-                <div className="flex items-center gap-3">
-                  <input
-                    id="template-font-size"
-                    type="range"
-                    min={TEMPLATE_FONT_SIZE_LIMITS.min}
-                    max={TEMPLATE_FONT_SIZE_LIMITS.max}
-                    value={fontSize}
-                    onChange={(event) => updateFontSize(Number(event.target.value))}
-                    className="h-10 flex-1"
-                  />
-                  <Input
-                    type="number"
-                    min={TEMPLATE_FONT_SIZE_LIMITS.min}
-                    max={TEMPLATE_FONT_SIZE_LIMITS.max}
-                    value={fontSize}
-                    onChange={(event) => updateFontSize(Number(event.target.value))}
-                    className="w-20"
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="template-font-size">Title size</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="template-font-size"
+                        type="range"
+                        min={TEMPLATE_FONT_SIZE_LIMITS.min}
+                        max={TEMPLATE_FONT_SIZE_LIMITS.max}
+                        value={fontSize}
+                        onChange={(event) => updateFontSize(Number(event.target.value))}
+                        className="h-10 flex-1"
+                      />
+                      <Input
+                        type="number"
+                        min={TEMPLATE_FONT_SIZE_LIMITS.min}
+                        max={TEMPLATE_FONT_SIZE_LIMITS.max}
+                        value={fontSize}
+                        onChange={(event) => updateFontSize(Number(event.target.value))}
+                        className="w-20"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="template-subtitle-font-size">Subtitle size</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="template-subtitle-font-size"
+                        type="range"
+                        min={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.min}
+                        max={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.max}
+                        value={subtitleFontSize}
+                        onChange={(event) => updateSubtitleFontSize(Number(event.target.value))}
+                        className="h-10 flex-1"
+                      />
+                      <Input
+                        type="number"
+                        min={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.min}
+                        max={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.max}
+                        value={subtitleFontSize}
+                        onChange={(event) => updateSubtitleFontSize(Number(event.target.value))}
+                        className="w-20"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="template-font-color">Font color</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="template-font-color"
+                        type="color"
+                        value={fontColor}
+                        onChange={(event) => selectFontColor(event.target.value)}
+                        className="h-10 w-12 cursor-pointer rounded border border-input bg-background p-1"
+                      />
+                      <Input value={fontColor} readOnly className="font-mono" />
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="template-subtitle-font-size">Subtitle size</Label>
-                <div className="flex items-center gap-3">
-                  <input
-                    id="template-subtitle-font-size"
-                    type="range"
-                    min={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.min}
-                    max={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.max}
-                    value={subtitleFontSize}
-                    onChange={(event) => updateSubtitleFontSize(Number(event.target.value))}
-                    className="h-10 flex-1"
-                  />
-                  <Input
-                    type="number"
-                    min={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.min}
-                    max={TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.max}
-                    value={subtitleFontSize}
-                    onChange={(event) => updateSubtitleFontSize(Number(event.target.value))}
-                    className="w-20"
-                  />
+                <div
+                  className="rounded-lg border p-4 text-center"
+                  style={{
+                    fontFamily: FONT_PREVIEW_STACKS[fontFamily],
+                    color: fontColor,
+                  }}
+                >
+                  <p className="font-bold leading-tight" style={{ fontSize: `${fontSize}px` }}>
+                    Sample Title
+                  </p>
+                  <p className="mt-2 opacity-90" style={{ fontSize: `${subtitleFontSize}px` }}>
+                    Sample subtitle preview
+                  </p>
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="template-font-color">Font color</Label>
-                <div className="flex items-center gap-3">
-                  <input
-                    id="template-font-color"
-                    type="color"
-                    value={fontColor}
-                    onChange={(event) => selectFontColor(event.target.value)}
-                    className="h-10 w-12 cursor-pointer rounded border border-input bg-background p-1"
-                  />
-                  <Input value={fontColor} readOnly className="font-mono" />
-                </div>
-              </div>
-            </div>
-
-            <div
-              className="rounded-lg border p-4 text-center"
-              style={{
-                fontFamily: FONT_PREVIEW_STACKS[fontFamily],
-                color: fontColor,
-              }}
-            >
-              <p className="font-bold leading-tight" style={{ fontSize: `${fontSize}px` }}>
-                Sample Title
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Final exports and preview will be rendered without title/subtitle text.
               </p>
-              <p className="mt-2 opacity-90" style={{ fontSize: `${subtitleFontSize}px` }}>
-                Sample subtitle preview
-              </p>
-            </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1662,23 +1721,31 @@ export default function GeneratePage() {
           </CardHeader>
           <CardContent>
             <div className="mx-auto mb-4 max-w-xs space-y-2">
-              <Label htmlFor="preview-locale">Preview locale</Label>
-              {previewLocaleOptions.length > 0 ? (
-                <select
-                  id="preview-locale"
-                  value={previewLocale}
-                  onChange={(event) => setPreviewLocale(event.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  {previewLocaleOptions.map((localeCode) => (
-                    <option key={localeCode} value={localeCode}>
-                      {localeLabel(localeCode)}
-                    </option>
-                  ))}
-                </select>
+              {includeText ? (
+                <>
+                  <Label htmlFor="preview-locale">Preview locale</Label>
+                  {previewLocaleOptions.length > 0 ? (
+                    <select
+                      id="preview-locale"
+                      value={previewLocale}
+                      onChange={(event) => setPreviewLocale(event.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      {previewLocaleOptions.map((localeCode) => (
+                        <option key={localeCode} value={localeCode}>
+                          {localeLabel(localeCode)}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No copy available for the selected preview screen yet.
+                    </p>
+                  )}
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No copy available for the selected preview screen yet.
+                  Preview locale selector is hidden because text overlay is disabled.
                 </p>
               )}
             </div>

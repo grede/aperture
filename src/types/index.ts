@@ -88,7 +88,8 @@ export type TemplateDeviceType = 'iPhone' | 'iPad' | 'Android';
 export type TemplateBackground =
   | { mode: 'solid'; color: string }
   | { mode: 'gradient'; from: string; to: string; angle?: number }
-  | { mode: 'image'; image_path: string };
+  | { mode: 'image'; image_path: string }
+  | { mode: 'transparent' };
 export type TemplateFontFamily =
   | 'system'
   | 'helvetica'
@@ -167,6 +168,7 @@ export interface CompositeOptions {
   style: TemplateStyle;
   background?: TemplateBackground;
   backgroundImage?: Buffer;
+  includeText?: boolean;
   textStyle?: TemplateTextStyle;
   deviceType: TemplateDeviceType;
   title: string;

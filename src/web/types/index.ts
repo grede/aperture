@@ -19,7 +19,8 @@ export type TemplateStyle = 'minimal' | 'modern' | 'gradient' | 'dark' | 'playfu
 export type TemplateBackground =
   | { mode: 'solid'; color: string }
   | { mode: 'gradient'; from: string; to: string; angle?: number }
-  | { mode: 'image'; image_path: string };
+  | { mode: 'image'; image_path: string }
+  | { mode: 'transparent' };
 export type TemplateFontFamily =
   | 'system'
   | 'helvetica'
@@ -175,6 +176,7 @@ export interface GenerationConfig {
   locales: string[];
   template_style: TemplateStyle;
   template_background?: TemplateBackground;
+  include_text?: boolean;
   text_style?: TemplateTextStyle;
   frame_mode: FrameMode;
   frame_modes?: FrameModesByDevice;
@@ -287,6 +289,7 @@ export interface StartGenerationRequest {
   locales: string[];
   template_style: TemplateStyle;
   template_background?: TemplateBackground;
+  include_text?: boolean;
   text_style?: TemplateTextStyle;
   frame_mode: FrameMode;
   frame_modes?: FrameModesByDevice;

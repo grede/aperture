@@ -62,11 +62,13 @@ export class GenerationService {
         locales,
         template_style,
         template_background,
+        include_text,
         text_style,
         frame_mode,
         frame_modes,
         frame_asset_files,
       } = config;
+      const includeText = include_text !== false;
       const templateBackgroundImage =
         template_background?.mode === 'image'
           ? await readTemplateBackground(template_background.image_path)
@@ -113,9 +115,8 @@ export class GenerationService {
 
         for (const locale of locales) {
           try {
-            // Check if copy exists for this screen + locale
-            const copy = getCopy(screen.id, locale);
-            if (!copy) {
+            const copy = includeText ? getCopy(screen.id, locale) : null;
+            if (includeText && !copy) {
               console.warn(`Skipping screen ${screen.id} for locale ${locale}: No copy found`);
               completedTasks++;
               const progress = Math.round((completedTasks / totalTasks) * 100);
@@ -144,6 +145,7 @@ export class GenerationService {
               template_style,
               template_background,
               templateBackgroundImage,
+              includeText,
               text_style
                 ? {
                     fontFamily: text_style.font_family,
@@ -153,8 +155,8 @@ export class GenerationService {
                   }
                 : undefined,
               templateDeviceType,
-              copy.title,
-              copy.subtitle || '',
+              includeText ? copy?.title || '' : '',
+              includeText ? copy?.subtitle || '' : '',
               locale,
               resolvedFrameMode,
               resolvedFrameAssetFile

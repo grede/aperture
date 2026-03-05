@@ -225,13 +225,19 @@ const FONTSOURCE_FONT_MAP: Partial<Record<TemplateFontFamily, FontSourceDescript
   space_grotesk: { packageName: '@fontsource/space-grotesk', familyName: 'Space Grotesk' },
   ubuntu: { packageName: '@fontsource/ubuntu', familyName: 'Ubuntu' },
   josefin_sans: { packageName: '@fontsource/josefin-sans', familyName: 'Josefin Sans' },
-  libre_baskerville: { packageName: '@fontsource/libre-baskerville', familyName: 'Libre Baskerville' },
+  libre_baskerville: {
+    packageName: '@fontsource/libre-baskerville',
+    familyName: 'Libre Baskerville',
+  },
   libre_franklin: { packageName: '@fontsource/libre-franklin', familyName: 'Libre Franklin' },
   mukta: { packageName: '@fontsource/mukta', familyName: 'Mukta' },
   oxygen: { packageName: '@fontsource/oxygen', familyName: 'Oxygen' },
   exo_2: { packageName: '@fontsource/exo-2', familyName: 'Exo 2' },
   inconsolata: { packageName: '@fontsource/inconsolata', familyName: 'Inconsolata' },
-  merriweather_sans: { packageName: '@fontsource/merriweather-sans', familyName: 'Merriweather Sans' },
+  merriweather_sans: {
+    packageName: '@fontsource/merriweather-sans',
+    familyName: 'Merriweather Sans',
+  },
   teko: { packageName: '@fontsource/teko', familyName: 'Teko' },
   anton: { packageName: '@fontsource/anton', familyName: 'Anton' },
   archivo: { packageName: '@fontsource/archivo', familyName: 'Archivo' },
@@ -243,12 +249,18 @@ const FONTSOURCE_FONT_MAP: Partial<Record<TemplateFontFamily, FontSourceDescript
   red_hat_display: { packageName: '@fontsource/red-hat-display', familyName: 'Red Hat Display' },
   red_hat_text: { packageName: '@fontsource/red-hat-text', familyName: 'Red Hat Text' },
   sora: { packageName: '@fontsource/sora', familyName: 'Sora' },
-  plus_jakarta_sans: { packageName: '@fontsource/plus-jakarta-sans', familyName: 'Plus Jakarta Sans' },
+  plus_jakarta_sans: {
+    packageName: '@fontsource/plus-jakarta-sans',
+    familyName: 'Plus Jakarta Sans',
+  },
   epilogue: { packageName: '@fontsource/epilogue', familyName: 'Epilogue' },
   lexend: { packageName: '@fontsource/lexend', familyName: 'Lexend' },
   inter_tight: { packageName: '@fontsource/inter-tight', familyName: 'Inter Tight' },
   fraunces: { packageName: '@fontsource/fraunces', familyName: 'Fraunces' },
-  cormorant_garamond: { packageName: '@fontsource/cormorant-garamond', familyName: 'Cormorant Garamond' },
+  cormorant_garamond: {
+    packageName: '@fontsource/cormorant-garamond',
+    familyName: 'Cormorant Garamond',
+  },
   crimson_pro: { packageName: '@fontsource/crimson-pro', familyName: 'Crimson Pro' },
   cabin: { packageName: '@fontsource/cabin', familyName: 'Cabin' },
   titillium_web: { packageName: '@fontsource/titillium-web', familyName: 'Titillium Web' },
@@ -346,10 +358,11 @@ export class TemplateEngine {
     if (!baseStyle) {
       throw new Error(`Unknown style: ${options.style}`);
     }
+    const includeText = options.includeText !== false;
     const style = options.background
       ? this.withAutoTextColor(baseStyle, options.background)
       : baseStyle;
-    const textRenderStyle = this.resolveTextStyle(style, options.textStyle);
+    const textRenderStyle = includeText ? this.resolveTextStyle(style, options.textStyle) : null;
 
     const dimensions = EXPORT_DIMENSIONS[options.deviceType];
     if (!dimensions) {
@@ -391,27 +404,36 @@ export class TemplateEngine {
       });
     }
 
-    const visualRegion = this.getVisualRegion(dimensions.width, dimensions.height, style);
     const frameMode = options.frameMode ?? 'minimal';
+    const visualRegion =
+      frameMode === 'none' && !includeText
+        ? {
+            left: 0,
+            top: 0,
+            width: dimensions.width,
+            height: dimensions.height,
+          }
+        : this.getVisualRegion(dimensions.width, dimensions.height, style, includeText);
 
     const layerResult =
       frameMode === 'none'
         ? await this.createNoFrameLayers(options, screenshotMeta, visualRegion)
         : await this.createFramedLayers(options, screenshotMeta, visualRegion);
 
-    const textSVG = this.createTextSVG(
-      options.title,
-      options.subtitle ?? '',
-      dimensions.width,
-      dimensions.height,
-      textRenderStyle,
-      layerResult.contentBottom
-    );
+    const compositeLayers = [...layerResult.layers];
+    if (textRenderStyle) {
+      const textSVG = this.createTextSVG(
+        options.title,
+        options.subtitle ?? '',
+        dimensions.width,
+        dimensions.height,
+        textRenderStyle,
+        layerResult.contentBottom
+      );
+      compositeLayers.push({ input: Buffer.from(textSVG), top: 0, left: 0 });
+    }
 
-    const canvas = background.composite([
-      ...layerResult.layers,
-      { input: Buffer.from(textSVG), top: 0, left: 0 },
-    ]);
+    const canvas = background.composite(compositeLayers);
 
     // Export as PNG
     return canvas.png().toBuffer();
@@ -420,9 +442,11 @@ export class TemplateEngine {
   private getVisualRegion(
     canvasWidth: number,
     canvasHeight: number,
-    style: StyleConfig
+    style: StyleConfig,
+    includeText: boolean
   ): VisualRegion {
-    const textReserve = style.textPosition === 'top' || style.textPosition === 'bottom' ? 240 : 0;
+    const textReserve =
+      includeText && (style.textPosition === 'top' || style.textPosition === 'bottom') ? 240 : 0;
     const left = style.deviceFramePadding;
     const width = canvasWidth - style.deviceFramePadding * 2;
     let top = style.deviceFramePadding;
@@ -769,6 +793,17 @@ export class TemplateEngine {
     background: TemplateBackground,
     backgroundImage?: Buffer
   ): Promise<sharp.Sharp> {
+    if (background.mode === 'transparent') {
+      return sharp({
+        create: {
+          width,
+          height,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        },
+      });
+    }
+
     if (background.mode === 'solid') {
       return sharp({
         create: {
@@ -849,6 +884,9 @@ export class TemplateEngine {
   }
 
   private withAutoTextColor(style: StyleConfig, background: TemplateBackground): StyleConfig {
+    if (background.mode === 'transparent') {
+      return style;
+    }
     const textColor = this.getContrastingTextColor(background);
     return { ...style, textColor };
   }
@@ -915,11 +953,7 @@ export class TemplateEngine {
     }
   }
 
-  private resolveFontFile(
-    files: string[],
-    packageName: string,
-    weight: FontWeight
-  ): string | null {
+  private resolveFontFile(files: string[], packageName: string, weight: FontWeight): string | null {
     const familyToken = packageName.split('/').pop() || '';
     const patterns = [
       `${familyToken}-latin-${weight}-normal`,
@@ -968,6 +1002,10 @@ export class TemplateEngine {
   }
 
   private getContrastingTextColor(background: TemplateBackground): string {
+    if (background.mode === 'transparent') {
+      return '#FFFFFF';
+    }
+
     if (background.mode === 'solid') {
       const rgb = this.parseHexColor(background.color);
       return this.isLightColor(rgb) ? '#111111' : '#FFFFFF';

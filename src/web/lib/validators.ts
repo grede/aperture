@@ -62,6 +62,9 @@ export const templateBackgroundSchema = z.discriminatedUnion('mode', [
     mode: z.literal('image'),
     image_path: z.string().min(1),
   }),
+  z.object({
+    mode: z.literal('transparent'),
+  }),
 ]);
 
 /**
@@ -191,6 +194,7 @@ export const startGenerationSchema = z.object({
     }),
   template_style: templateStyleSchema,
   template_background: templateBackgroundSchema.optional(),
+  include_text: z.boolean().optional(),
   text_style: templateTextStyleSchema.optional(),
   frame_mode: frameModeSchema,
   frame_modes: frameModesByDeviceSchema.optional(),
@@ -212,17 +216,32 @@ export const saveGenerationPresetSchema = z.object({
 /**
  * Template preview request schema
  */
-export const templatePreviewSchema = z.object({
-  screenshot_base64: z.string().min(1, 'Screenshot is required'),
-  style: templateStyleSchema,
-  template_background: templateBackgroundSchema.optional(),
-  text_style: templateTextStyleSchema.optional(),
-  device_type: deviceTypeSchema,
-  title: z.string().min(1),
-  subtitle: z.string().optional(),
-  frame_mode: frameModeSchema.optional().default('minimal'),
-  frame_asset_file: z.string().min(1).optional(),
-});
+export const templatePreviewSchema = z
+  .object({
+    screenshot_base64: z.string().min(1, 'Screenshot is required'),
+    style: templateStyleSchema,
+    template_background: templateBackgroundSchema.optional(),
+    include_text: z.boolean().optional(),
+    text_style: templateTextStyleSchema.optional(),
+    device_type: deviceTypeSchema,
+    title: z.string(),
+    subtitle: z.string().optional(),
+    frame_mode: frameModeSchema.optional().default('minimal'),
+    frame_asset_file: z.string().min(1).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.include_text === false) {
+      return;
+    }
+
+    if (data.title.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['title'],
+        message: 'Title is required when text overlay is enabled',
+      });
+    }
+  });
 
 /**
  * Gradient suggestion request schema
