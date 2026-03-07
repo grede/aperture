@@ -64,6 +64,7 @@ interface RealisticFrameAsset {
   overlayWidth: number;
   overlayHeight: number;
   screen: ScreenRect;
+  screenMode: 'overlay' | 'underlay';
 }
 
 interface LayerResult {
@@ -610,6 +611,29 @@ export class TemplateEngine {
       .resize(frame.width, frame.height, { fit: 'fill' })
       .png()
       .toBuffer();
+
+    if (frameAsset.screenMode === 'underlay') {
+      return {
+        layers: [
+          {
+            input: Buffer.from(this.createScreenBackdropSVG(frame.width, frame.height, screen)),
+            left: frameLeft,
+            top: frameTop,
+          },
+          {
+            input: resizedOverlay,
+            left: frameLeft,
+            top: frameTop,
+          },
+          {
+            input: maskedScreenshot,
+            left: frameLeft + screen.x,
+            top: frameTop + screen.y,
+          },
+        ],
+        contentBottom: frameTop + frame.height,
+      };
+    }
 
     return {
       layers: [

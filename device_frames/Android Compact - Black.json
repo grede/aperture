@@ -1,0 +1,10 @@
+{
+  "screen": {
+    "x": 45,
+    "y": 45,
+    "width": 1236,
+    "height": 2751,
+    "cornerRadius": 87
+  },
+  "screenMode": "overlay"
+}

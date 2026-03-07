@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { listRealisticFrameAssetFiles } from '../../../../../templates/realistic-frame-assets.js';
 import { errorResponse, successResponse } from '@/lib/api-helpers';
 
+export const dynamic = 'force-dynamic';
+
 type SupportedDeviceType = 'iPhone' | 'iPad' | 'Android-phone' | 'Android-tablet';
 type TemplateDeviceType = 'iPhone' | 'iPad' | 'Android';
 

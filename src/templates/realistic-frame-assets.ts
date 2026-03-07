@@ -16,8 +16,11 @@ export interface RealisticFrameAsset {
   overlayWidth: number;
   overlayHeight: number;
   screen: ScreenRect;
+  screenMode: ScreenMode;
   sourceFile: string;
 }
+
+export type ScreenMode = 'overlay' | 'underlay';
 
 interface RealisticFrameCandidate {
   filePath: string;
@@ -25,6 +28,7 @@ interface RealisticFrameCandidate {
   overlayWidth: number;
   overlayHeight: number;
   screen: ScreenRect;
+  screenMode: ScreenMode;
 }
 
 const TRANSPARENCY_THRESHOLD = 10;
@@ -35,8 +39,12 @@ const DEFAULT_SCREEN_ASPECT: Record<TemplateDeviceType, number> = {
   Android: 9 / 19.5,
 };
 
-const candidateCache = new Map<string, Promise<RealisticFrameCandidate[]>>();
+const candidateCache = new Map<
+  string,
+  { dirMTimeMs: number; promise: Promise<RealisticFrameCandidate[]> }
+>();
 const overlayBufferCache = new Map<string, Promise<Buffer>>();
+const DEFAULT_SCREEN_MODE: ScreenMode = 'overlay';
 
 export async function resolveFrameAssetsDir(explicitDir?: string): Promise<string | undefined> {
   if (explicitDir && (await isDirectory(explicitDir))) {
@@ -84,6 +92,7 @@ export async function resolveRealisticFrameAsset(options: {
         overlayWidth: preferredCandidate.overlayWidth,
         overlayHeight: preferredCandidate.overlayHeight,
         screen: preferredCandidate.screen,
+        screenMode: preferredCandidate.screenMode,
         sourceFile: preferredCandidate.fileName,
       };
     }
@@ -112,6 +121,7 @@ export async function resolveRealisticFrameAsset(options: {
     overlayWidth: selectedCandidate.overlayWidth,
     overlayHeight: selectedCandidate.overlayHeight,
     screen: selectedCandidate.screen,
+    screenMode: selectedCandidate.screenMode,
     sourceFile: selectedCandidate.fileName,
   };
 }
@@ -136,9 +146,11 @@ async function loadFrameCandidates(
   deviceType: TemplateDeviceType
 ): Promise<RealisticFrameCandidate[]> {
   const cacheKey = `${assetsDir}:${deviceType}`;
+  const directoryStat = await stat(assetsDir);
+  const dirMTimeMs = directoryStat.mtimeMs;
   const cached = candidateCache.get(cacheKey);
-  if (cached) {
-    return cached;
+  if (cached && cached.dirMTimeMs === dirMTimeMs) {
+    return cached.promise;
   }
 
   const loadPromise = (async () => {
@@ -158,7 +170,7 @@ async function loadFrameCandidates(
     return parsed.filter((candidate): candidate is RealisticFrameCandidate => Boolean(candidate));
   })();
 
-  candidateCache.set(cacheKey, loadPromise);
+  candidateCache.set(cacheKey, { dirMTimeMs, promise: loadPromise });
   return loadPromise;
 }
 
@@ -191,8 +203,9 @@ async function parseFrameCandidate(
     return null;
   }
 
+  const metadataFromJSON = await readFrameMetadataFromJSON(assetsDir, fileName);
   const screen =
-    (await readScreenRectFromJSON(assetsDir, fileName)) ||
+    metadataFromJSON?.screen ||
     (await detectScreenRectFromAlphaMask(overlay, metadata.width, metadata.height));
 
   if (!screen) {
@@ -205,19 +218,29 @@ async function parseFrameCandidate(
     overlayWidth: metadata.width,
     overlayHeight: metadata.height,
     screen,
+    screenMode: metadataFromJSON?.screenMode ?? DEFAULT_SCREEN_MODE,
   };
 }
 
-async function readScreenRectFromJSON(
+async function readFrameMetadataFromJSON(
   assetsDir: string,
   fileName: string
-): Promise<ScreenRect | null> {
+): Promise<{ screen: ScreenRect; screenMode: ScreenMode } | null> {
   const metadataPath = join(assetsDir, `${parse(fileName).name}.json`);
 
   try {
     const metadataJSON = await readFile(metadataPath, 'utf-8');
-    const parsed = JSON.parse(metadataJSON) as { screen?: Partial<ScreenRect> };
-    return parseScreenRect(parsed.screen);
+    const parsed = JSON.parse(metadataJSON) as {
+      screen?: Partial<ScreenRect>;
+      screenMode?: string;
+    };
+    const screen = parseScreenRect(parsed.screen);
+    if (!screen) {
+      return null;
+    }
+
+    const screenMode: ScreenMode = parsed.screenMode === 'underlay' ? 'underlay' : 'overlay';
+    return { screen, screenMode };
   } catch {
     return null;
   }

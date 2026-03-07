@@ -550,7 +550,8 @@ export default function GeneratePage() {
 
       try {
         const response = await fetch(
-          `/api/frame-assets/options?device_type=${encodeURIComponent(deviceType)}`
+          `/api/frame-assets/options?device_type=${encodeURIComponent(deviceType)}`,
+          { cache: 'no-store' }
         );
         if (!response.ok) {
           throw new Error(`Failed to load frame options for ${deviceType}`);
