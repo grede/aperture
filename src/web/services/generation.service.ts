@@ -60,6 +60,7 @@ export class GenerationService {
       const {
         devices,
         locales,
+        screen_ids,
         template_style,
         template_background,
         include_text,
@@ -82,13 +83,18 @@ export class GenerationService {
 
       // Fetch all screens for this app
       const screens = getScreensByAppId(app_id);
+      const selectedScreenIdSet =
+        Array.isArray(screen_ids) && screen_ids.length > 0 ? new Set(screen_ids) : null;
+      const scopedScreens = selectedScreenIdSet
+        ? screens.filter((screen) => selectedScreenIdSet.has(screen.id))
+        : screens;
 
-      if (screens.length === 0) {
+      if (scopedScreens.length === 0) {
         throw new Error('No screens found for this app');
       }
 
       const relevantScreenVariantTasks: ScreenDeviceVariantTask[] = [];
-      for (const screen of screens) {
+      for (const screen of scopedScreens) {
         for (const deviceType of devices) {
           const variant = screen.variants.find((candidate) => candidate.device_type === deviceType);
           if (variant) {

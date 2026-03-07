@@ -37,6 +37,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const generation = createGeneration(appId, {
       devices: validated.devices,
       locales: validated.locales,
+      screen_ids: validated.screen_ids,
       template_style: validated.template_style,
       template_background: validated.template_background,
       include_text: validated.include_text,

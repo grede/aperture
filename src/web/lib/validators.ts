@@ -192,6 +192,13 @@ export const startGenerationSchema = z.object({
     .refine((locales) => new Set(locales).size === locales.length, {
       message: 'Locales must be unique',
     }),
+  screen_ids: z
+    .array(z.number().int().positive())
+    .min(1, 'At least one screen is required')
+    .refine((screenIds) => new Set(screenIds).size === screenIds.length, {
+      message: 'Screens must be unique',
+    })
+    .optional(),
   template_style: templateStyleSchema,
   template_background: templateBackgroundSchema.optional(),
   include_text: z.boolean().optional(),

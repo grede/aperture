@@ -174,6 +174,7 @@ export interface Copy {
 export interface GenerationConfig {
   devices: DeviceType[];
   locales: string[];
+  screen_ids?: number[];
   template_style: TemplateStyle;
   template_background?: TemplateBackground;
   include_text?: boolean;
@@ -287,6 +288,7 @@ export interface GenerateCopiesRequest {
 export interface StartGenerationRequest {
   devices: DeviceType[];
   locales: string[];
+  screen_ids?: number[];
   template_style: TemplateStyle;
   template_background?: TemplateBackground;
   include_text?: boolean;

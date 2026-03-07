@@ -277,6 +277,7 @@ export default function GeneratePage() {
   const [copies, setCopies] = useState<CopiesByScreenAndLocale>({});
   const [selectedDevices, setSelectedDevices] = useState<DeviceType[]>([]);
   const [selectedLocales, setSelectedLocales] = useState<string[]>([]);
+  const [selectedScreenIds, setSelectedScreenIds] = useState<number[]>([]);
   const [previewLocale, setPreviewLocale] = useState('en');
   const [backgroundMode, setBackgroundMode] = useState<TemplateBackground['mode']>('solid');
   const [solidColor, setSolidColor] = useState('#4A90E2');
@@ -324,14 +325,30 @@ export default function GeneratePage() {
       )
     ) as DeviceType[];
   }, [app]);
+  const availableScreenIds = useMemo(() => {
+    if (!app) return [];
+    return app.screens.map((screen) => screen.id);
+  }, [app]);
+  const selectedScreens = useMemo(() => {
+    if (!app) {
+      return [];
+    }
+    const selectedScreenIdSet = new Set(selectedScreenIds);
+    return app.screens.filter((screen) => selectedScreenIdSet.has(screen.id));
+  }, [app, selectedScreenIds]);
   const previewDevice = useMemo(() => selectedDevices[0], [selectedDevices]);
   const previewScreen = useMemo(() => {
     if (!app || !previewDevice) {
       return null;
     }
 
-    return app.screens.find((screen) => screenHasDeviceVariant(screen, previewDevice)) || null;
-  }, [app, previewDevice]);
+    return (
+      app.screens.find(
+        (screen) =>
+          selectedScreenIds.includes(screen.id) && screenHasDeviceVariant(screen, previewDevice)
+      ) || null
+    );
+  }, [app, previewDevice, selectedScreenIds]);
   const previewVariant = useMemo(() => {
     if (!previewScreen || !previewDevice) {
       return null;
@@ -438,6 +455,7 @@ export default function GeneratePage() {
     return {
       devices: selectedDevices,
       locales: selectedLocales,
+      screen_ids: selectedScreenIds,
       template_style: BACKGROUND_TEMPLATE_STYLE,
       template_background: templateBackground,
       include_text: includeText,
@@ -450,6 +468,7 @@ export default function GeneratePage() {
   }, [
     selectedDevices,
     selectedLocales,
+    selectedScreenIds,
     templateBackground,
     includeText,
     templateTextStyle,
@@ -484,6 +503,14 @@ export default function GeneratePage() {
       return [availableLocales[0]];
     });
 
+    setSelectedScreenIds((prev) => {
+      const availableScreenIdSet = new Set(availableScreenIds);
+      if (prev.length > 0) {
+        return prev.filter((screenId) => availableScreenIdSet.has(screenId));
+      }
+      return [...availableScreenIds];
+    });
+
     setFrameModesByDevice((prev) => {
       const next: FrameModesByDevice = {};
       availableDevices.forEach((deviceType) => {
@@ -491,7 +518,7 @@ export default function GeneratePage() {
       });
       return next;
     });
-  }, [app, availableDevices, availableLocales]);
+  }, [app, availableDevices, availableLocales, availableScreenIds]);
 
   useEffect(() => {
     if (previewLocaleOptions.length === 0) {
@@ -743,6 +770,14 @@ export default function GeneratePage() {
     const { config } = preset;
     const applicableDevices = config.devices.filter((device) => availableDevices.includes(device));
     const applicableLocales = config.locales.filter((locale) => availableLocales.includes(locale));
+    const availableScreenIdSet = new Set(availableScreenIds);
+    const configuredScreenIds = config.screen_ids;
+    const filteredScreenIds =
+      configuredScreenIds && configuredScreenIds.length > 0
+        ? configuredScreenIds.filter((screenId) => availableScreenIdSet.has(screenId))
+        : [...availableScreenIds];
+    const applicableScreenIds =
+      filteredScreenIds.length > 0 ? filteredScreenIds : [...availableScreenIds];
 
     const nextFrameModes: FrameModesByDevice = {};
     const nextFrameAssets: FrameAssetFilesByDevice = {};
@@ -756,6 +791,7 @@ export default function GeneratePage() {
 
     setSelectedDevices(applicableDevices);
     setSelectedLocales(applicableLocales);
+    setSelectedScreenIds(applicableScreenIds);
     setFrameModesByDevice(nextFrameModes);
     setSelectedFrameAssetFilesByDevice(nextFrameAssets);
 
@@ -787,6 +823,9 @@ export default function GeneratePage() {
 
     const unavailableDeviceCount = config.devices.length - applicableDevices.length;
     const unavailableLocaleCount = config.locales.length - applicableLocales.length;
+    const unavailableScreenCount = configuredScreenIds
+      ? configuredScreenIds.length - filteredScreenIds.length
+      : 0;
 
     const skippedDetails: string[] = [];
     if (unavailableDeviceCount > 0) {
@@ -794,6 +833,9 @@ export default function GeneratePage() {
     }
     if (unavailableLocaleCount > 0) {
       skippedDetails.push(`${unavailableLocaleCount} locale(s) not available in copies`);
+    }
+    if (unavailableScreenCount > 0) {
+      skippedDetails.push(`${unavailableScreenCount} screen(s) not present in this app`);
     }
 
     setPresetError(null);
@@ -834,6 +876,10 @@ export default function GeneratePage() {
     }
     if (selectedLocales.length === 0) {
       setPresetError('Select at least one locale before saving a template.');
+      return;
+    }
+    if (selectedScreenIds.length === 0) {
+      setPresetError('Select at least one screen before saving a template.');
       return;
     }
 
@@ -901,6 +947,35 @@ export default function GeneratePage() {
         ? prev.filter((locale) => locale !== localeCode)
         : [...prev, localeCode]
     );
+  };
+
+  const selectAllLocales = () => {
+    setSelectedLocales([...availableLocales]);
+  };
+
+  const toggleScreen = (screenId: number) => {
+    setSelectedScreenIds((prev) => {
+      if (!prev.includes(screenId)) {
+        return [...prev, screenId];
+      }
+
+      if (prev.length === 1) {
+        return prev;
+      }
+
+      return prev.filter((id) => id !== screenId);
+    });
+  };
+
+  const selectAllScreens = () => {
+    setSelectedScreenIds([...availableScreenIds]);
+  };
+
+  const keepFirstScreenOnly = () => {
+    if (availableScreenIds.length === 0) {
+      return;
+    }
+    setSelectedScreenIds([availableScreenIds[0]]);
   };
 
   const setDeviceFrameMode = (deviceType: DeviceType, frameMode: FrameMode) => {
@@ -999,8 +1074,8 @@ export default function GeneratePage() {
     const suggestionDevice = selectedDevices[0];
     const suggestionLocale = selectedLocales[0] || previewLocale || 'en';
     const suggestionScreen =
-      app.screens.find((screen) => screenHasDeviceVariant(screen, suggestionDevice)) ||
-      app.screens[0];
+      selectedScreens.find((screen) => screenHasDeviceVariant(screen, suggestionDevice)) ||
+      selectedScreens[0];
     const suggestionVariant = suggestionScreen
       ? findPreferredVariantForDeviceAndLocale(
           suggestionScreen,
@@ -1097,6 +1172,10 @@ export default function GeneratePage() {
       setError('Upload a background image before starting generation.');
       return;
     }
+    if (selectedScreenIds.length === 0) {
+      setError('Select at least one screen before starting generation.');
+      return;
+    }
 
     setGenerating(true);
     setError(null);
@@ -1152,7 +1231,7 @@ export default function GeneratePage() {
     );
   }
 
-  const selectedScreenVariantCount = app.screens.reduce((total, screen) => {
+  const selectedScreenVariantCount = selectedScreens.reduce((total, screen) => {
     const variantCountForSelectedDevices = selectedDevices.filter((deviceType) =>
       screenHasDeviceVariant(screen, deviceType)
     ).length;
@@ -1266,7 +1345,104 @@ export default function GeneratePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>2. Choose Frame Per Device</CardTitle>
+            <CardTitle>2. Select Screens</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">
+                  Included in export: {selectedScreenIds.length} of {app.screens.length}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Toggle each screen between Included and Excluded.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={selectAllScreens}
+                  disabled={selectedScreenIds.length === app.screens.length}
+                >
+                  Include All (Default)
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={keepFirstScreenOnly}
+                  disabled={availableScreenIds.length <= 1 && selectedScreenIds.length <= 1}
+                >
+                  Keep First Only
+                </Button>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {app.screens.map((screen) => {
+                const selected = selectedScreenIds.includes(screen.id);
+                const canToggleOff = !(selected && selectedScreenIds.length === 1);
+                const previewPath = screen.variants[0]?.screenshot_path || screen.screenshot_path;
+                const deviceCount = new Set(screen.variants.map((variant) => variant.device_type))
+                  .size;
+                const screenCopyByLocale = copies[screen.id] || {};
+                const screenTitle =
+                  screenCopyByLocale.en?.title ||
+                  screenCopyByLocale[previewLocale]?.title ||
+                  Object.values(screenCopyByLocale)[0]?.title ||
+                  'No title yet';
+
+                return (
+                  <button
+                    key={screen.id}
+                    type="button"
+                    className={`rounded-lg border p-3 text-left transition-colors ${
+                      selected
+                        ? 'border-emerald-500 bg-emerald-500/10'
+                        : 'border-input hover:bg-accent/60'
+                    }`}
+                    onClick={() => toggleScreen(screen.id)}
+                    disabled={!canToggleOff}
+                    aria-pressed={selected}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="relative h-16 w-11 shrink-0 overflow-hidden rounded border bg-muted">
+                        <Image
+                          src={`/api/uploads/${previewPath}`}
+                          alt={`Screen ${screen.position + 1} preview`}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">Screen {screen.position + 1}</p>
+                        <p className="text-xs text-muted-foreground truncate">{screenTitle}</p>
+                        <p
+                          className={`text-xs ${
+                            selected ? 'text-emerald-700' : 'text-muted-foreground'
+                          }`}
+                        >
+                          {selected ? 'Included' : 'Excluded'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {deviceCount} device variant(s)
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              At least one screen must remain included.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>3. Choose Frame Per Device</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             {selectedDevices.map((deviceType) => (
@@ -1347,7 +1523,7 @@ export default function GeneratePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>3. Select Languages</CardTitle>
+            <CardTitle>4. Select Languages</CardTitle>
           </CardHeader>
           <CardContent>
             {availableLocales.length === 0 ? (
@@ -1355,17 +1531,33 @@ export default function GeneratePage() {
                 No saved locales found. Add copy first in Manage Copies.
               </p>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {availableLocales.map((localeCode) => (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm text-muted-foreground">
+                    {selectedLocales.length} of {availableLocales.length} language(s) selected
+                  </p>
                   <Button
-                    key={localeCode}
+                    type="button"
                     size="sm"
-                    variant={selectedLocales.includes(localeCode) ? 'default' : 'outline'}
-                    onClick={() => toggleLocale(localeCode)}
+                    variant="outline"
+                    onClick={selectAllLocales}
+                    disabled={selectedLocales.length === availableLocales.length}
                   >
-                    {localeLabel(localeCode)}
+                    Select All
                   </Button>
-                ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {availableLocales.map((localeCode) => (
+                    <Button
+                      key={localeCode}
+                      size="sm"
+                      variant={selectedLocales.includes(localeCode) ? 'default' : 'outline'}
+                      onClick={() => toggleLocale(localeCode)}
+                    >
+                      {localeLabel(localeCode)}
+                    </Button>
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>
@@ -1373,7 +1565,7 @@ export default function GeneratePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>4. Choose Template Background</CardTitle>
+            <CardTitle>5. Choose Template Background</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid max-w-xl grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1559,7 +1751,7 @@ export default function GeneratePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>5. Text Overlay</CardTitle>
+            <CardTitle>6. Text Overlay</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid max-w-sm grid-cols-2 gap-2">
@@ -1717,7 +1909,7 @@ export default function GeneratePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>6. Preview</CardTitle>
+            <CardTitle>7. Preview</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="mx-auto mb-4 max-w-xs space-y-2">
@@ -1786,6 +1978,7 @@ export default function GeneratePage() {
                   generating ||
                   selectedDevices.length === 0 ||
                   selectedLocales.length === 0 ||
+                  selectedScreenIds.length === 0 ||
                   backgroundImageUploading ||
                   (backgroundMode === 'image' && !templateBackground)
                 }
