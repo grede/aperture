@@ -14,12 +14,25 @@ import {
 } from '../lib/db';
 import { readTemplateBackground, readUploadByPath, saveGeneration } from '../lib/storage';
 import { DEVICE_TYPE_TO_TEMPLATE } from '../lib/constants';
-import type { DeviceType, Screen, ScreenVariant } from '../types';
+import type {
+  DeviceType,
+  FrameAssetFilesByDevice,
+  FrameModesByDevice,
+  FrameOffsetsByDevice,
+  FrameScalesByDevice,
+  GenerationConfig,
+  Screen,
+  ScreenGenerationConfig,
+  ScreenVariant,
+  TemplateBackground,
+  TemplateTextStyle,
+} from '../types';
 
 type ScreenDeviceVariantTask = {
   screen: Screen;
   deviceType: DeviceType;
   variant: ScreenVariant;
+  locales: string[];
 };
 
 function resolveLocalizedOrBaseVariant(
@@ -40,6 +53,36 @@ function resolveLocalizedOrBaseVariant(
  */
 export class GenerationService {
   private templateService = getTemplateService();
+
+  private resolveScreenConfig(
+    config: GenerationConfig,
+    screenId: number
+  ): ScreenGenerationConfig | undefined {
+    const record = config.screen_configs;
+    if (!record) {
+      return undefined;
+    }
+
+    return record[screenId] ?? record[String(screenId) as unknown as number];
+  }
+
+  private async resolveBackgroundImage(
+    background: TemplateBackground | undefined,
+    cache: Map<string, Buffer>
+  ): Promise<Buffer | undefined> {
+    if (background?.mode !== 'image') {
+      return undefined;
+    }
+
+    const cached = cache.get(background.image_path);
+    if (cached) {
+      return cached;
+    }
+
+    const buffer = await readTemplateBackground(background.image_path);
+    cache.set(background.image_path, buffer);
+    return buffer;
+  }
 
   /**
    * Execute a generation job
@@ -68,12 +111,11 @@ export class GenerationService {
         frame_mode,
         frame_modes,
         frame_asset_files,
+        frame_scales,
+        frame_offsets,
       } = config;
-      const includeText = include_text !== false;
-      const templateBackgroundImage =
-        template_background?.mode === 'image'
-          ? await readTemplateBackground(template_background.image_path)
-          : undefined;
+      const defaultIncludeText = include_text !== false;
+      const backgroundImageCache = new Map<string, Buffer>();
 
       // Fetch app for validation
       const app = getAppById(app_id);
@@ -95,6 +137,10 @@ export class GenerationService {
 
       const relevantScreenVariantTasks: ScreenDeviceVariantTask[] = [];
       for (const screen of scopedScreens) {
+        const screenConfig = this.resolveScreenConfig(config, screen.id);
+        const screenLocales =
+          screenConfig?.locales && screenConfig.locales.length > 0 ? screenConfig.locales : locales;
+
         for (const deviceType of devices) {
           const variant = screen.variants.find((candidate) => candidate.device_type === deviceType);
           if (variant) {
@@ -102,6 +148,7 @@ export class GenerationService {
               screen,
               deviceType,
               variant,
+              locales: screenLocales,
             });
           }
         }
@@ -112,17 +159,37 @@ export class GenerationService {
       }
 
       // Calculate total tasks
-      const totalTasks = relevantScreenVariantTasks.length * locales.length;
+      const totalTasks = relevantScreenVariantTasks.reduce(
+        (sum, task) => sum + task.locales.length,
+        0
+      );
       let completedTasks = 0;
 
       // Process each screen/device variant for each locale
       for (const task of relevantScreenVariantTasks) {
-        const { screen, deviceType, variant } = task;
+        const { screen, deviceType, variant, locales: taskLocales } = task;
+        const screenConfig = this.resolveScreenConfig(config, screen.id);
+        const resolvedBackground = screenConfig?.template_background ?? template_background;
+        const resolvedIncludeText = screenConfig?.include_text ?? defaultIncludeText;
+        const resolvedTextStyle = screenConfig?.text_style ?? text_style;
+        const resolvedFrameModeMap: FrameModesByDevice | undefined =
+          screenConfig?.frame_modes ?? frame_modes;
+        const resolvedFrameAssetFiles: FrameAssetFilesByDevice | undefined =
+          screenConfig?.frame_asset_files ?? frame_asset_files;
+        const resolvedFrameScales: FrameScalesByDevice | undefined =
+          screenConfig?.frame_scales ?? frame_scales;
+        const resolvedFrameOffsets: FrameOffsetsByDevice | undefined =
+          screenConfig?.frame_offsets ?? frame_offsets;
+        const resolvedFrameModeDefault = screenConfig?.frame_mode ?? frame_mode;
+        const resolvedBackgroundImage = await this.resolveBackgroundImage(
+          resolvedBackground,
+          backgroundImageCache
+        );
 
-        for (const locale of locales) {
+        for (const locale of taskLocales) {
           try {
-            const copy = includeText ? getCopy(screen.id, locale) : null;
-            if (includeText && !copy) {
+            const copy = resolvedIncludeText ? getCopy(screen.id, locale) : null;
+            if (resolvedIncludeText && !copy) {
               console.warn(`Skipping screen ${screen.id} for locale ${locale}: No copy found`);
               completedTasks++;
               const progress = Math.round((completedTasks / totalTasks) * 100);
@@ -141,31 +208,38 @@ export class GenerationService {
 
             // Map device type to template device type
             const templateDeviceType = DEVICE_TYPE_TO_TEMPLATE[deviceType];
-            const resolvedFrameMode = frame_modes?.[deviceType] ?? frame_mode ?? 'minimal';
+            const resolvedFrameMode =
+              resolvedFrameModeMap?.[deviceType] ?? resolvedFrameModeDefault ?? 'minimal';
             const resolvedFrameAssetFile =
-              resolvedFrameMode === 'realistic' ? frame_asset_files?.[deviceType] : undefined;
+              resolvedFrameMode === 'realistic' ? resolvedFrameAssetFiles?.[deviceType] : undefined;
+            const resolvedFrameScale =
+              resolvedFrameMode === 'none' ? undefined : resolvedFrameScales?.[deviceType];
+            const resolvedFrameOffset =
+              resolvedFrameMode === 'none' ? undefined : resolvedFrameOffsets?.[deviceType];
 
             // Generate composited image
             const outputBuffer = await this.templateService.generateScreenshot(
               screenshotBuffer,
               template_style,
-              template_background,
-              templateBackgroundImage,
-              includeText,
-              text_style
+              resolvedBackground,
+              resolvedBackgroundImage,
+              resolvedIncludeText,
+              resolvedTextStyle
                 ? {
-                    fontFamily: text_style.font_family,
-                    fontSize: text_style.font_size,
-                    subtitleFontSize: text_style.subtitle_size,
-                    fontColor: text_style.font_color,
+                    fontFamily: resolvedTextStyle.font_family,
+                    fontSize: resolvedTextStyle.font_size,
+                    subtitleFontSize: resolvedTextStyle.subtitle_size,
+                    fontColor: resolvedTextStyle.font_color,
                   }
                 : undefined,
               templateDeviceType,
-              includeText ? copy?.title || '' : '',
-              includeText ? copy?.subtitle || '' : '',
+              resolvedIncludeText ? copy?.title || '' : '',
+              resolvedIncludeText ? copy?.subtitle || '' : '',
               locale,
               resolvedFrameMode,
-              resolvedFrameAssetFile
+              resolvedFrameAssetFile,
+              resolvedFrameScale,
+              resolvedFrameOffset
             );
 
             // Save generated image

@@ -3,9 +3,12 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import type {
+  CompositeLayoutMetadata,
   CompositeOptions,
   TemplateBackground,
   TemplateDeviceType,
+  TemplateFrameOffset,
+  TemplateRect,
   TemplateStyle,
   TemplateTextStyle,
 } from '../types/index.js';
@@ -70,6 +73,7 @@ interface RealisticFrameAsset {
 interface LayerResult {
   layers: sharp.OverlayOptions[];
   contentBottom: number;
+  frameRect?: TemplateRect;
 }
 
 interface TextRenderStyle extends StyleConfig {
@@ -337,6 +341,8 @@ const FONTSOURCE_PACKAGE_JSON_PATHS: Partial<Record<TemplateFontFamily, string>>
 };
 
 const FONT_FACE_CSS_CACHE = new Map<TemplateFontFamily, string>();
+const MIN_FRAME_SCALE = 0.6;
+const MAX_FRAME_SCALE = 1;
 
 export class TemplateEngine {
   private styles: Map<TemplateStyle, StyleConfig>;
@@ -355,6 +361,13 @@ export class TemplateEngine {
    * Composite a screenshot into a store-ready marketing image
    */
   async composite(options: CompositeOptions): Promise<Buffer> {
+    const result = await this.compositeWithLayout(options);
+    return result.image;
+  }
+
+  async compositeWithLayout(
+    options: CompositeOptions
+  ): Promise<{ image: Buffer; layout: CompositeLayoutMetadata }> {
     const baseStyle = this.styles.get(options.style);
     if (!baseStyle) {
       throw new Error(`Unknown style: ${options.style}`);
@@ -436,8 +449,22 @@ export class TemplateEngine {
 
     const canvas = background.composite(compositeLayers);
 
-    // Export as PNG
-    return canvas.png().toBuffer();
+    return {
+      image: await canvas.png().toBuffer(),
+      layout: {
+        canvas: {
+          width: dimensions.width,
+          height: dimensions.height,
+        },
+        visualRegion: {
+          left: visualRegion.left,
+          top: visualRegion.top,
+          width: visualRegion.width,
+          height: visualRegion.height,
+        },
+        frameRect: layerResult.frameRect,
+      },
+    };
   }
 
   private getVisualRegion(
@@ -472,6 +499,53 @@ export class TemplateEngine {
 
     const height = maxHeight;
     return { width: Math.round(height * aspectRatio), height };
+  }
+
+  private normalizeFrameScale(scale?: number): number {
+    if (!Number.isFinite(scale)) {
+      return 1;
+    }
+
+    return Math.max(MIN_FRAME_SCALE, Math.min(MAX_FRAME_SCALE, scale ?? 1));
+  }
+
+  private scaleRect(rect: FittedRect, scale?: number): FittedRect {
+    const normalizedScale = this.normalizeFrameScale(scale);
+
+    return {
+      width: Math.max(1, Math.round(rect.width * normalizedScale)),
+      height: Math.max(1, Math.round(rect.height * normalizedScale)),
+    };
+  }
+
+  private normalizeFrameOffset(offset?: TemplateFrameOffset): Required<TemplateFrameOffset> {
+    const normalizeAxis = (value?: number): number => {
+      if (!Number.isFinite(value)) {
+        return 0;
+      }
+
+      return Math.max(-1, Math.min(1, value ?? 0));
+    };
+
+    return {
+      x: normalizeAxis(offset?.x),
+      y: normalizeAxis(offset?.y),
+    };
+  }
+
+  private positionFrameInRegion(
+    visualRegion: VisualRegion,
+    frame: FittedRect,
+    offset?: TemplateFrameOffset
+  ): { left: number; top: number } {
+    const normalizedOffset = this.normalizeFrameOffset(offset);
+    const availableX = Math.max(0, visualRegion.width - frame.width);
+    const availableY = Math.max(0, visualRegion.height - frame.height);
+
+    return {
+      left: visualRegion.left + Math.round(((normalizedOffset.x + 1) / 2) * availableX),
+      top: visualRegion.top + Math.round(((normalizedOffset.y + 1) / 2) * availableY),
+    };
   }
 
   private async createNoFrameLayers(
@@ -521,9 +595,13 @@ export class TemplateEngine {
     visualRegion: VisualRegion
   ): Promise<LayerResult> {
     const preset = MINIMAL_FRAME_PRESETS[options.deviceType];
-    const frame = this.fitAspect(preset.outerAspect, visualRegion.width, visualRegion.height);
-    const frameLeft = visualRegion.left + Math.round((visualRegion.width - frame.width) / 2);
-    const frameTop = visualRegion.top + Math.round((visualRegion.height - frame.height) / 2);
+    const fittedFrame = this.fitAspect(preset.outerAspect, visualRegion.width, visualRegion.height);
+    const frame = this.scaleRect(fittedFrame, options.frameScale);
+    const { left: frameLeft, top: frameTop } = this.positionFrameInRegion(
+      visualRegion,
+      frame,
+      options.frameOffset
+    );
     const screen = this.resolveMinimalScreenRect(frame.width, frame.height, preset);
 
     const maskedScreenshot = await this.resizeAndMaskScreenshot(
@@ -559,6 +637,12 @@ export class TemplateEngine {
         },
       ],
       contentBottom: frameTop + frame.height,
+      frameRect: {
+        left: frameLeft,
+        top: frameTop,
+        width: frame.width,
+        height: frame.height,
+      },
     };
   }
 
@@ -581,13 +665,17 @@ export class TemplateEngine {
       return null;
     }
 
-    const frame = this.fitAspect(
+    const fittedFrame = this.fitAspect(
       frameAsset.overlayWidth / frameAsset.overlayHeight,
       visualRegion.width,
       visualRegion.height
     );
-    const frameLeft = visualRegion.left + Math.round((visualRegion.width - frame.width) / 2);
-    const frameTop = visualRegion.top + Math.round((visualRegion.height - frame.height) / 2);
+    const frame = this.scaleRect(fittedFrame, options.frameScale);
+    const { left: frameLeft, top: frameTop } = this.positionFrameInRegion(
+      visualRegion,
+      frame,
+      options.frameOffset
+    );
     const scaleX = frame.width / frameAsset.overlayWidth;
     const scaleY = frame.height / frameAsset.overlayHeight;
     const screen = {
@@ -632,6 +720,12 @@ export class TemplateEngine {
           },
         ],
         contentBottom: frameTop + frame.height,
+        frameRect: {
+          left: frameLeft,
+          top: frameTop,
+          width: frame.width,
+          height: frame.height,
+        },
       };
     }
 
@@ -654,6 +748,12 @@ export class TemplateEngine {
         },
       ],
       contentBottom: frameTop + frame.height,
+      frameRect: {
+        left: frameLeft,
+        top: frameTop,
+        width: frame.width,
+        height: frame.height,
+      },
     };
   }
 

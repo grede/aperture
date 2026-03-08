@@ -87,6 +87,30 @@ export const frameAssetFilesByDeviceSchema = z
     'Android-tablet': z.string().min(1).optional(),
   })
   .strict();
+export const frameScaleSchema = z.number().min(0.6).max(1);
+export const frameScalesByDeviceSchema = z
+  .object({
+    iPhone: frameScaleSchema.optional(),
+    iPad: frameScaleSchema.optional(),
+    'Android-phone': frameScaleSchema.optional(),
+    'Android-tablet': frameScaleSchema.optional(),
+  })
+  .strict();
+export const frameOffsetAxisSchema = z.number().min(-1).max(1);
+export const frameOffsetSchema = z
+  .object({
+    x: frameOffsetAxisSchema.optional(),
+    y: frameOffsetAxisSchema.optional(),
+  })
+  .strict();
+export const frameOffsetsByDeviceSchema = z
+  .object({
+    iPhone: frameOffsetSchema.optional(),
+    iPad: frameOffsetSchema.optional(),
+    'Android-phone': frameOffsetSchema.optional(),
+    'Android-tablet': frameOffsetSchema.optional(),
+  })
+  .strict();
 
 /**
  * Locale code schema (validates against supported locales)
@@ -96,6 +120,31 @@ export const localeSchema = z
   .refine((locale) => SUPPORTED_LOCALES.some((l) => l.code === locale), {
     message: 'Invalid locale code',
   });
+
+export const screenGenerationConfigSchema = z
+  .object({
+    locales: z
+      .array(localeSchema)
+      .min(1, 'At least one locale is required')
+      .refine((locales) => new Set(locales).size === locales.length, {
+        message: 'Locales must be unique',
+      })
+      .optional(),
+    template_background: templateBackgroundSchema.optional(),
+    include_text: z.boolean().optional(),
+    text_style: templateTextStyleSchema.optional(),
+    frame_mode: frameModeSchema.optional(),
+    frame_modes: frameModesByDeviceSchema.optional(),
+    frame_asset_files: frameAssetFilesByDeviceSchema.optional(),
+    frame_scales: frameScalesByDeviceSchema.optional(),
+    frame_offsets: frameOffsetsByDeviceSchema.optional(),
+  })
+  .strict();
+
+export const screenGenerationConfigsSchema = z.record(
+  z.string().regex(/^\d+$/, 'Screen config keys must be numeric screen ids'),
+  screenGenerationConfigSchema
+);
 
 /**
  * Create app request schema
@@ -206,6 +255,9 @@ export const startGenerationSchema = z.object({
   frame_mode: frameModeSchema,
   frame_modes: frameModesByDeviceSchema.optional(),
   frame_asset_files: frameAssetFilesByDeviceSchema.optional(),
+  frame_scales: frameScalesByDeviceSchema.optional(),
+  frame_offsets: frameOffsetsByDeviceSchema.optional(),
+  screen_configs: screenGenerationConfigsSchema.optional(),
 });
 
 /**
@@ -235,6 +287,8 @@ export const templatePreviewSchema = z
     subtitle: z.string().optional(),
     frame_mode: frameModeSchema.optional().default('minimal'),
     frame_asset_file: z.string().min(1).optional(),
+    frame_scale: frameScaleSchema.optional().default(1),
+    frame_offset: frameOffsetSchema.optional(),
   })
   .superRefine((data, ctx) => {
     if (data.include_text === false) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -27,18 +27,30 @@ import type {
   CopiesByScreenAndLocale,
   DeviceType,
   FrameAssetFilesByDevice,
+  FrameOffset,
+  FrameOffsetsByDevice,
   FrameMode,
   FrameModesByDevice,
+  FrameScalesByDevice,
   GenerationConfig,
   GenerationPreset,
+  PreviewLayoutMetadata,
+  ScreenGenerationConfig,
   TemplateFontFamily,
   TemplateBackground,
   Screen,
+  TemplateRect,
   TemplateStyle,
 } from '@/types';
 
 const BACKGROUND_TEMPLATE_STYLE: TemplateStyle = 'modern';
 const HEX_COLOR_REGEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+const FRAME_SCALE_MIN = 0.6;
+const FRAME_SCALE_MAX = 1;
+const FRAME_SCALE_STEP = 0.05;
+const FRAME_OFFSET_MIN = -1;
+const FRAME_OFFSET_MAX = 1;
+const FRAME_OFFSET_STEP = 0.05;
 const SOLID_COLOR_PRESETS = [
   '#111827',
   '#0F766E',
@@ -200,6 +212,53 @@ function frameFileLabel(frameFile: string): string {
   return frameFile.replace(/\.png$/i, '');
 }
 
+function normalizeFrameScale(value?: number): number {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+
+  const clamped = Math.max(FRAME_SCALE_MIN, Math.min(FRAME_SCALE_MAX, value ?? 1));
+  return Math.round(clamped / FRAME_SCALE_STEP) * FRAME_SCALE_STEP;
+}
+
+function normalizeFrameOffsetAxis(value?: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  const clamped = Math.max(FRAME_OFFSET_MIN, Math.min(FRAME_OFFSET_MAX, value ?? 0));
+  return Math.round(clamped / FRAME_OFFSET_STEP) * FRAME_OFFSET_STEP;
+}
+
+function normalizeFrameOffset(offset?: FrameOffset): Required<FrameOffset> {
+  return {
+    x: normalizeFrameOffsetAxis(offset?.x),
+    y: normalizeFrameOffsetAxis(offset?.y),
+  };
+}
+
+function rectToPercentageStyle(rect: TemplateRect, canvas: PreviewLayoutMetadata['canvas']) {
+  return {
+    left: `${(rect.left / canvas.width) * 100}%`,
+    top: `${(rect.top / canvas.height) * 100}%`,
+    width: `${(rect.width / canvas.width) * 100}%`,
+    height: `${(rect.height / canvas.height) * 100}%`,
+  };
+}
+
+type DragSession = {
+  pointerId: number;
+  deviceType: DeviceType;
+  mode: 'move' | 'resize';
+  corner?: 'nw' | 'ne' | 'sw' | 'se';
+  startClientX: number;
+  startClientY: number;
+  startFrameRect: TemplateRect;
+  visualRegion: TemplateRect;
+  canvas: PreviewLayoutMetadata['canvas'];
+  baseFrameSize: { width: number; height: number };
+};
+
 function FrameModePreview({
   deviceType,
   mode,
@@ -278,7 +337,9 @@ export default function GeneratePage() {
   const [selectedDevices, setSelectedDevices] = useState<DeviceType[]>([]);
   const [selectedLocales, setSelectedLocales] = useState<string[]>([]);
   const [selectedScreenIds, setSelectedScreenIds] = useState<number[]>([]);
+  const [activeScreenId, setActiveScreenId] = useState<number | null>(null);
   const [previewLocale, setPreviewLocale] = useState('en');
+  const [previewDevice, setPreviewDevice] = useState<DeviceType | null>(null);
   const [backgroundMode, setBackgroundMode] = useState<TemplateBackground['mode']>('solid');
   const [solidColor, setSolidColor] = useState('#4A90E2');
   const [gradientFrom, setGradientFrom] = useState('#4A90E2');
@@ -297,6 +358,11 @@ export default function GeneratePage() {
   >({});
   const [selectedFrameAssetFilesByDevice, setSelectedFrameAssetFilesByDevice] =
     useState<FrameAssetFilesByDevice>({});
+  const [frameScalesByDevice, setFrameScalesByDevice] = useState<FrameScalesByDevice>({});
+  const [frameOffsetsByDevice, setFrameOffsetsByDevice] = useState<FrameOffsetsByDevice>({});
+  const [screenConfigsById, setScreenConfigsById] = useState<
+    Partial<Record<number, ScreenGenerationConfig>>
+  >({});
   const [frameFilesLoadingByDevice, setFrameFilesLoadingByDevice] = useState<
     Partial<Record<DeviceType, boolean>>
   >({});
@@ -313,9 +379,16 @@ export default function GeneratePage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewLayout, setPreviewLayout] = useState<PreviewLayoutMetadata | null>(null);
+  const [previewFrameRectOverride, setPreviewFrameRectOverride] = useState<TemplateRect | null>(
+    null
+  );
+  const [previewTransformMode, setPreviewTransformMode] = useState<'move' | 'resize' | null>(null);
   const [suggestingGradient, setSuggestingGradient] = useState(false);
   const [gradientSuggestionError, setGradientSuggestionError] = useState<string | null>(null);
   const previewRequestIdRef = useRef(0);
+  const previewSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const dragSessionRef = useRef<DragSession | null>(null);
 
   const availableDevices = useMemo(() => {
     if (!app) return [];
@@ -336,36 +409,171 @@ export default function GeneratePage() {
     const selectedScreenIdSet = new Set(selectedScreenIds);
     return app.screens.filter((screen) => selectedScreenIdSet.has(screen.id));
   }, [app, selectedScreenIds]);
-  const previewDevice = useMemo(() => selectedDevices[0], [selectedDevices]);
-  const previewScreen = useMemo(() => {
-    if (!app || !previewDevice) {
+  const formatScreenLabel = useCallback(
+    (screenId: number) => {
+      const screen = app?.screens.find((candidate) => candidate.id === screenId);
+      return screen ? `Screen ${screen.position + 1}` : `Screen ${screenId}`;
+    },
+    [app]
+  );
+  const activeScreen = useMemo(() => {
+    if (!app || activeScreenId === null) {
       return null;
     }
 
-    return (
-      app.screens.find(
-        (screen) =>
-          selectedScreenIds.includes(screen.id) && screenHasDeviceVariant(screen, previewDevice)
-      ) || null
+    return app.screens.find((screen) => screen.id === activeScreenId) || null;
+  }, [activeScreenId, app]);
+  const previewScreen = useMemo(() => {
+    if (!activeScreen || !previewDevice) {
+      return null;
+    }
+
+    return screenHasDeviceVariant(activeScreen, previewDevice) ? activeScreen : null;
+  }, [activeScreen, previewDevice]);
+
+  const availableLocales = useMemo(() => collectSavedLocales(copies), [copies]);
+  const defaultLocaleSelection = useMemo(() => {
+    if (availableLocales.includes('en')) {
+      return ['en'];
+    }
+
+    return availableLocales[0] ? [availableLocales[0]] : [];
+  }, [availableLocales]);
+  const getAvailableLocalesForScreen = useCallback(
+    (screenId: number | null) => {
+      if (screenId === null) {
+        return availableLocales;
+      }
+
+      return Object.keys(copies[screenId] || {}).sort((a, b) =>
+        localeLabel(a).localeCompare(localeLabel(b))
+      );
+    },
+    [availableLocales, copies]
+  );
+  const getDefaultLocalesForScreen = useCallback(
+    (screenId: number | null) => {
+      const screenLocales = getAvailableLocalesForScreen(screenId);
+      if (screenLocales.includes('en')) {
+        return ['en'];
+      }
+
+      return screenLocales[0] ? [screenLocales[0]] : defaultLocaleSelection;
+    },
+    [defaultLocaleSelection, getAvailableLocalesForScreen]
+  );
+  const activeScreenAvailableLocales = useMemo(
+    () => getAvailableLocalesForScreen(activeScreenId),
+    [activeScreenId, getAvailableLocalesForScreen]
+  );
+
+  const buildDefaultScreenConfig = useCallback(
+    (screenId: number | null): ScreenGenerationConfig => {
+      const defaultLocales = getDefaultLocalesForScreen(screenId);
+      const defaultFrameModes: FrameModesByDevice = {};
+      const defaultFrameAssetFiles: FrameAssetFilesByDevice = {};
+      const defaultFrameScales: FrameScalesByDevice = {};
+      const defaultFrameOffsets: FrameOffsetsByDevice = {};
+
+      availableDevices.forEach((deviceType) => {
+        defaultFrameModes[deviceType] = 'minimal';
+        const defaultFrameAssetFile = frameAssetFilesByDevice[deviceType]?.[0];
+        if (defaultFrameAssetFile) {
+          defaultFrameAssetFiles[deviceType] = defaultFrameAssetFile;
+        }
+        defaultFrameScales[deviceType] = 1;
+        defaultFrameOffsets[deviceType] = { x: 0, y: 0 };
+      });
+
+      return {
+        locales: defaultLocales,
+        template_background: { mode: 'solid', color: '#4A90E2' },
+        include_text: true,
+        text_style: {
+          font_family: 'system',
+          font_size: 52,
+          subtitle_size: 29,
+          font_color: '#FFFFFF',
+        },
+        frame_mode: 'minimal',
+        frame_modes: defaultFrameModes,
+        frame_asset_files: defaultFrameAssetFiles,
+        frame_scales: defaultFrameScales,
+        frame_offsets: defaultFrameOffsets,
+      };
+    },
+    [availableDevices, frameAssetFilesByDevice, getDefaultLocalesForScreen]
+  );
+
+  const ensureScreenConfig = useCallback(
+    (screenId: number | null, config?: ScreenGenerationConfig): ScreenGenerationConfig => {
+      const defaults = buildDefaultScreenConfig(screenId);
+      const availableLocalesForScreen = getAvailableLocalesForScreen(screenId);
+      const configuredLocales = (config?.locales || []).filter((locale) =>
+        availableLocalesForScreen.includes(locale)
+      );
+
+      return {
+        ...defaults,
+        ...config,
+        locales: configuredLocales.length > 0 ? configuredLocales : defaults.locales,
+        template_background: config?.template_background ?? defaults.template_background,
+        include_text: config?.include_text ?? defaults.include_text,
+        text_style: {
+          ...defaults.text_style,
+          ...config?.text_style,
+        },
+        frame_mode: config?.frame_mode ?? defaults.frame_mode,
+        frame_modes: {
+          ...defaults.frame_modes,
+          ...config?.frame_modes,
+        },
+        frame_asset_files: {
+          ...defaults.frame_asset_files,
+          ...config?.frame_asset_files,
+        },
+        frame_scales: {
+          ...defaults.frame_scales,
+          ...config?.frame_scales,
+        },
+        frame_offsets: {
+          ...defaults.frame_offsets,
+          ...config?.frame_offsets,
+        },
+      };
+    },
+    [buildDefaultScreenConfig, getAvailableLocalesForScreen]
+  );
+
+  const getScreenConfig = useCallback(
+    (screenId: number | null): ScreenGenerationConfig => {
+      if (screenId === null) {
+        return ensureScreenConfig(null);
+      }
+
+      return ensureScreenConfig(screenId, screenConfigsById[screenId]);
+    },
+    [ensureScreenConfig, screenConfigsById]
+  );
+  const previewLocaleOptions = useMemo(() => {
+    if (!previewScreen) {
+      return [];
+    }
+
+    const screenLocaleOptions = getAvailableLocalesForScreen(previewScreen.id);
+    const configuredLocales = getScreenConfig(previewScreen.id).locales || [];
+    const configuredAvailableLocales = screenLocaleOptions.filter((locale) =>
+      configuredLocales.includes(locale)
     );
-  }, [app, previewDevice, selectedScreenIds]);
+
+    return configuredAvailableLocales.length > 0 ? configuredAvailableLocales : screenLocaleOptions;
+  }, [getAvailableLocalesForScreen, getScreenConfig, previewScreen]);
   const previewVariant = useMemo(() => {
     if (!previewScreen || !previewDevice) {
       return null;
     }
     return findPreferredVariantForDeviceAndLocale(previewScreen, previewDevice, previewLocale);
   }, [previewLocale, previewScreen, previewDevice]);
-  const previewLocaleOptions = useMemo(() => {
-    if (!previewScreen) {
-      return [];
-    }
-
-    return Object.keys(copies[previewScreen.id] || {}).sort((a, b) =>
-      localeLabel(a).localeCompare(localeLabel(b))
-    );
-  }, [copies, previewScreen]);
-
-  const availableLocales = useMemo(() => collectSavedLocales(copies), [copies]);
   const templateBackground = useMemo<TemplateBackground | undefined>(() => {
     if (backgroundMode === 'transparent') {
       return {
@@ -441,39 +649,44 @@ export default function GeneratePage() {
     [fontFamily]
   );
   const currentGenerationConfig = useMemo<GenerationConfig>(() => {
-    const selectedDeviceFrameModes: FrameModesByDevice = {};
-    const selectedDeviceFrameAssets: FrameAssetFilesByDevice = {};
-
-    selectedDevices.forEach((deviceType) => {
-      selectedDeviceFrameModes[deviceType] = frameModesByDevice[deviceType] || 'minimal';
-      const selectedFrameAssetFile = selectedFrameAssetFilesByDevice[deviceType];
-      if (selectedFrameAssetFile) {
-        selectedDeviceFrameAssets[deviceType] = selectedFrameAssetFile;
-      }
-    });
+    const selectedScreenConfigs = selectedScreenIds.reduce<
+      Partial<Record<number, ScreenGenerationConfig>>
+    >((acc, screenId) => {
+      acc[screenId] = getScreenConfig(screenId);
+      return acc;
+    }, {});
+    const fallbackScreenConfig = getScreenConfig(activeScreenId);
+    const mergedLocales = Array.from(
+      new Set(
+        selectedScreenIds.flatMap(
+          (screenId) => getScreenConfig(screenId).locales || defaultLocaleSelection
+        )
+      )
+    );
 
     return {
       devices: selectedDevices,
-      locales: selectedLocales,
+      locales: mergedLocales,
       screen_ids: selectedScreenIds,
       template_style: BACKGROUND_TEMPLATE_STYLE,
-      template_background: templateBackground,
-      include_text: includeText,
-      text_style: includeText ? templateTextStyle : undefined,
-      frame_mode: 'minimal',
-      frame_modes: selectedDeviceFrameModes,
-      frame_asset_files:
-        Object.keys(selectedDeviceFrameAssets).length > 0 ? selectedDeviceFrameAssets : undefined,
+      template_background: fallbackScreenConfig.template_background,
+      include_text: fallbackScreenConfig.include_text,
+      text_style:
+        fallbackScreenConfig.include_text !== false ? fallbackScreenConfig.text_style : undefined,
+      frame_mode: fallbackScreenConfig.frame_mode || 'minimal',
+      frame_modes: fallbackScreenConfig.frame_modes,
+      frame_asset_files: fallbackScreenConfig.frame_asset_files,
+      frame_scales: fallbackScreenConfig.frame_scales,
+      frame_offsets: fallbackScreenConfig.frame_offsets,
+      screen_configs: selectedScreenConfigs,
     };
   }, [
+    activeScreenId,
+    defaultLocaleSelection,
+    getScreenConfig,
     selectedDevices,
-    selectedLocales,
     selectedScreenIds,
-    templateBackground,
-    includeText,
-    templateTextStyle,
-    frameModesByDevice,
-    selectedFrameAssetFilesByDevice,
+    screenConfigsById,
   ]);
   const selectedPreset = useMemo(
     () => generationPresets.find((preset) => preset.id === Number(selectedPresetId)) || null,
@@ -518,7 +731,97 @@ export default function GeneratePage() {
       });
       return next;
     });
+    setFrameScalesByDevice((prev) => {
+      const next: FrameScalesByDevice = {};
+      availableDevices.forEach((deviceType) => {
+        next[deviceType] = normalizeFrameScale(prev[deviceType]);
+      });
+      return next;
+    });
+    setFrameOffsetsByDevice((prev) => {
+      const next: FrameOffsetsByDevice = {};
+      availableDevices.forEach((deviceType) => {
+        next[deviceType] = normalizeFrameOffset(prev[deviceType]);
+      });
+      return next;
+    });
   }, [app, availableDevices, availableLocales, availableScreenIds]);
+
+  useEffect(() => {
+    if (!app) {
+      return;
+    }
+
+    setScreenConfigsById((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      availableScreenIds.forEach((screenId) => {
+        const ensured = ensureScreenConfig(screenId, next[screenId]);
+        if (JSON.stringify(ensured) !== JSON.stringify(next[screenId])) {
+          next[screenId] = ensured;
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [app, availableScreenIds, ensureScreenConfig]);
+
+  useEffect(() => {
+    if (selectedScreenIds.length === 0) {
+      setActiveScreenId(null);
+      return;
+    }
+
+    setActiveScreenId((current) =>
+      current !== null && selectedScreenIds.includes(current) ? current : selectedScreenIds[0]
+    );
+  }, [selectedScreenIds]);
+
+  useEffect(() => {
+    if (activeScreenId === null) {
+      return;
+    }
+
+    const activeConfig = getScreenConfig(activeScreenId);
+    const activeBackground = activeConfig.template_background;
+
+    setSelectedLocales(activeConfig.locales || getDefaultLocalesForScreen(activeScreenId));
+    setBackgroundMode(activeBackground?.mode || 'solid');
+    setSolidColor(
+      (activeBackground?.mode === 'solid' ? activeBackground.color : '#4A90E2').toUpperCase()
+    );
+    setGradientFrom(
+      (activeBackground?.mode === 'gradient' ? activeBackground.from : '#4A90E2').toUpperCase()
+    );
+    setGradientTo(
+      (activeBackground?.mode === 'gradient' ? activeBackground.to : '#7B68EE').toUpperCase()
+    );
+    setBackgroundImagePath(activeBackground?.mode === 'image' ? activeBackground.image_path : null);
+    setBackgroundImageError(null);
+    setIncludeText(activeConfig.include_text !== false);
+    setFontFamily(activeConfig.text_style?.font_family || 'system');
+    setFontSize(activeConfig.text_style?.font_size ?? 52);
+    setSubtitleFontSize(activeConfig.text_style?.subtitle_size ?? 29);
+    setFontColor((activeConfig.text_style?.font_color || '#FFFFFF').toUpperCase());
+    setFrameModesByDevice(activeConfig.frame_modes || {});
+    setSelectedFrameAssetFilesByDevice(activeConfig.frame_asset_files || {});
+    setFrameScalesByDevice(activeConfig.frame_scales || {});
+    setFrameOffsetsByDevice(activeConfig.frame_offsets || {});
+    setPreviewFrameRectOverride(null);
+  }, [activeScreenId, getDefaultLocalesForScreen, getScreenConfig]);
+
+  useEffect(() => {
+    if (selectedDevices.length === 0) {
+      setPreviewDevice(null);
+      return;
+    }
+
+    setPreviewDevice((current) =>
+      current && selectedDevices.includes(current) ? current : selectedDevices[0]
+    );
+  }, [selectedDevices]);
 
   useEffect(() => {
     if (previewLocaleOptions.length === 0) {
@@ -603,6 +906,8 @@ export default function GeneratePage() {
     const generatePreview = async () => {
       if (!app || !previewDevice) {
         setPreviewImage(null);
+        setPreviewLayout(null);
+        setPreviewFrameRectOverride(null);
         setPreviewError(null);
         setPreviewLoading(false);
         return;
@@ -610,6 +915,8 @@ export default function GeneratePage() {
 
       if (!previewScreen) {
         setPreviewImage(null);
+        setPreviewLayout(null);
+        setPreviewFrameRectOverride(null);
         setPreviewError(null);
         setPreviewLoading(false);
         return;
@@ -618,6 +925,8 @@ export default function GeneratePage() {
       if (!previewVariant) {
         setPreviewError('No screenshot found for the selected preview device.');
         setPreviewImage(null);
+        setPreviewLayout(null);
+        setPreviewFrameRectOverride(null);
         setPreviewLoading(false);
         return;
       }
@@ -630,6 +939,8 @@ export default function GeneratePage() {
       if (includeText && !previewCopy) {
         setPreviewError('Add at least one copy before generating preview.');
         setPreviewImage(null);
+        setPreviewLayout(null);
+        setPreviewFrameRectOverride(null);
         setPreviewLoading(false);
         return;
       }
@@ -637,6 +948,8 @@ export default function GeneratePage() {
       if (backgroundMode === 'image' && !templateBackground) {
         setPreviewError('Upload a background image to render preview.');
         setPreviewImage(null);
+        setPreviewLayout(null);
+        setPreviewFrameRectOverride(null);
         setPreviewLoading(false);
         return;
       }
@@ -658,6 +971,14 @@ export default function GeneratePage() {
           previewFrameMode === 'realistic'
             ? selectedFrameAssetFilesByDevice[previewDevice]
             : undefined;
+        const previewFrameScale =
+          previewFrameMode === 'none'
+            ? undefined
+            : normalizeFrameScale(frameScalesByDevice[previewDevice]);
+        const previewFrameOffset =
+          previewFrameMode === 'none'
+            ? undefined
+            : normalizeFrameOffset(frameOffsetsByDevice[previewDevice]);
 
         const previewResponse = await fetch('/api/templates/preview', {
           method: 'POST',
@@ -673,6 +994,8 @@ export default function GeneratePage() {
             subtitle: includeText ? previewCopy?.subtitle || '' : '',
             frame_mode: previewFrameMode,
             frame_asset_file: previewFrameAssetFile,
+            frame_scale: previewFrameScale,
+            frame_offset: previewFrameOffset,
           }),
         });
 
@@ -685,6 +1008,8 @@ export default function GeneratePage() {
           return;
         }
         setPreviewImage(`data:image/png;base64,${payload.data.image_base64}`);
+        setPreviewLayout((payload.data.layout as PreviewLayoutMetadata | undefined) || null);
+        setPreviewFrameRectOverride(null);
       } catch (previewGenerationError) {
         if (previewRequestIdRef.current !== requestId) {
           return;
@@ -701,7 +1026,13 @@ export default function GeneratePage() {
       }
     };
 
-    generatePreview();
+    const timeoutId = window.setTimeout(() => {
+      generatePreview();
+    }, 120);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [
     app,
     copies,
@@ -716,6 +1047,8 @@ export default function GeneratePage() {
     templateTextStyle,
     frameModesByDevice,
     selectedFrameAssetFilesByDevice,
+    frameScalesByDevice,
+    frameOffsetsByDevice,
   ]);
 
   const loadGenerationPresets = async () => {
@@ -770,7 +1103,6 @@ export default function GeneratePage() {
   const applyGenerationPreset = (preset: GenerationPreset) => {
     const { config } = preset;
     const applicableDevices = config.devices.filter((device) => availableDevices.includes(device));
-    const applicableLocales = config.locales.filter((locale) => availableLocales.includes(locale));
     const availableScreenIdSet = new Set(availableScreenIds);
     const configuredScreenIds = config.screen_ids;
     const filteredScreenIds =
@@ -779,51 +1111,43 @@ export default function GeneratePage() {
         : [...availableScreenIds];
     const applicableScreenIds =
       filteredScreenIds.length > 0 ? filteredScreenIds : [...availableScreenIds];
+    const applicableGlobalLocales = config.locales.filter((locale) =>
+      availableLocales.includes(locale)
+    );
+    const nextScreenConfigs: Partial<Record<number, ScreenGenerationConfig>> = {};
 
-    const nextFrameModes: FrameModesByDevice = {};
-    const nextFrameAssets: FrameAssetFilesByDevice = {};
-    applicableDevices.forEach((deviceType) => {
-      nextFrameModes[deviceType] = config.frame_modes?.[deviceType] || config.frame_mode;
-      const frameAssetFile = config.frame_asset_files?.[deviceType];
-      if (frameAssetFile) {
-        nextFrameAssets[deviceType] = frameAssetFile;
-      }
+    applicableScreenIds.forEach((screenId) => {
+      const rawScreenConfig = config.screen_configs?.[screenId] ??
+        (config.screen_configs?.[String(screenId) as unknown as number] as
+          | ScreenGenerationConfig
+          | undefined) ?? {
+          locales: applicableGlobalLocales,
+          template_background: config.template_background,
+          include_text: config.include_text,
+          text_style: config.text_style,
+          frame_mode: config.frame_mode,
+          frame_modes: config.frame_modes,
+          frame_asset_files: config.frame_asset_files,
+          frame_scales: config.frame_scales,
+          frame_offsets: config.frame_offsets,
+        };
+
+      nextScreenConfigs[screenId] = ensureScreenConfig(screenId, {
+        ...rawScreenConfig,
+        locales:
+          rawScreenConfig.locales?.filter((locale) => availableLocales.includes(locale)) ||
+          applicableGlobalLocales,
+      });
     });
 
     setSelectedDevices(applicableDevices);
-    setSelectedLocales(applicableLocales);
     setSelectedScreenIds(applicableScreenIds);
-    setFrameModesByDevice(nextFrameModes);
-    setSelectedFrameAssetFilesByDevice(nextFrameAssets);
-
-    const background = config.template_background;
-    if (background?.mode === 'solid') {
-      setBackgroundMode('solid');
-      setSolidColor(background.color.toUpperCase());
-    } else if (background?.mode === 'gradient') {
-      setBackgroundMode('gradient');
-      setGradientFrom(background.from.toUpperCase());
-      setGradientTo(background.to.toUpperCase());
-    } else if (background?.mode === 'image') {
-      setBackgroundMode('image');
-      setBackgroundImagePath(background.image_path);
-    } else if (background?.mode === 'transparent') {
-      setBackgroundMode('transparent');
-    } else {
-      setBackgroundMode('solid');
-      setSolidColor('#4A90E2');
-    }
+    setScreenConfigsById((prev) => ({ ...prev, ...nextScreenConfigs }));
+    setActiveScreenId(applicableScreenIds[0] ?? null);
     setBackgroundImageError(null);
 
-    setIncludeText(config.include_text !== false);
-    const textStyle = config.text_style;
-    setFontFamily(textStyle?.font_family || 'system');
-    updateFontSize(textStyle?.font_size ?? 52);
-    updateSubtitleFontSize(textStyle?.subtitle_size ?? 29);
-    setFontColor((textStyle?.font_color || '#FFFFFF').toUpperCase());
-
     const unavailableDeviceCount = config.devices.length - applicableDevices.length;
-    const unavailableLocaleCount = config.locales.length - applicableLocales.length;
+    const unavailableLocaleCount = config.locales.length - applicableGlobalLocales.length;
     const unavailableScreenCount = configuredScreenIds
       ? configuredScreenIds.length - filteredScreenIds.length
       : 0;
@@ -867,16 +1191,25 @@ export default function GeneratePage() {
   };
 
   const saveGenerationPreset = async () => {
-    if (backgroundMode === 'image' && !templateBackground) {
-      setPresetError('Upload a background image before saving a template.');
-      return;
-    }
     if (selectedDevices.length === 0) {
       setPresetError('Select at least one device before saving a template.');
       return;
     }
-    if (selectedLocales.length === 0) {
-      setPresetError('Select at least one locale before saving a template.');
+    const screenMissingLocales = selectedScreenIds.find(
+      (screenId) => (getScreenConfig(screenId).locales || []).length === 0
+    );
+    if (screenMissingLocales) {
+      setPresetError(`Select at least one locale for ${formatScreenLabel(screenMissingLocales)}.`);
+      return;
+    }
+    const screenMissingBackgroundImage = selectedScreenIds.find((screenId) => {
+      const screenBackground = getScreenConfig(screenId).template_background;
+      return screenBackground?.mode === 'image' && !screenBackground.image_path;
+    });
+    if (screenMissingBackgroundImage) {
+      setPresetError(
+        `Upload a background image for ${formatScreenLabel(screenMissingBackgroundImage)}.`
+      );
       return;
     }
     if (selectedScreenIds.length === 0) {
@@ -943,15 +1276,24 @@ export default function GeneratePage() {
   };
 
   const toggleLocale = (localeCode: string) => {
-    setSelectedLocales((prev) =>
-      prev.includes(localeCode)
+    setSelectedLocales((prev) => {
+      const next = prev.includes(localeCode)
         ? prev.filter((locale) => locale !== localeCode)
-        : [...prev, localeCode]
-    );
+        : [...prev, localeCode];
+      updateActiveScreenConfig((current) => ({
+        ...current,
+        locales: next,
+      }));
+      return next;
+    });
   };
 
   const selectAllLocales = () => {
-    setSelectedLocales([...availableLocales]);
+    setSelectedLocales([...activeScreenAvailableLocales]);
+    updateActiveScreenConfig((current) => ({
+      ...current,
+      locales: [...activeScreenAvailableLocales],
+    }));
   };
 
   const toggleScreen = (screenId: number) => {
@@ -979,18 +1321,300 @@ export default function GeneratePage() {
     setSelectedScreenIds([availableScreenIds[0]]);
   };
 
+  const updateActiveScreenConfig = (
+    updater: (current: ScreenGenerationConfig) => ScreenGenerationConfig
+  ) => {
+    if (activeScreenId === null) {
+      return;
+    }
+
+    setScreenConfigsById((prev) => ({
+      ...prev,
+      [activeScreenId]: updater(ensureScreenConfig(activeScreenId, prev[activeScreenId])),
+    }));
+  };
+
   const setDeviceFrameMode = (deviceType: DeviceType, frameMode: FrameMode) => {
     setFrameModesByDevice((prev) => ({ ...prev, [deviceType]: frameMode }));
+    updateActiveScreenConfig((current) => ({
+      ...current,
+      frame_modes: {
+        ...current.frame_modes,
+        [deviceType]: frameMode,
+      },
+    }));
   };
 
   const setDeviceFrameAssetFile = (deviceType: DeviceType, frameAssetFile: string) => {
     setSelectedFrameAssetFilesByDevice((prev) => ({ ...prev, [deviceType]: frameAssetFile }));
+    updateActiveScreenConfig((current) => ({
+      ...current,
+      frame_asset_files: {
+        ...current.frame_asset_files,
+        [deviceType]: frameAssetFile,
+      },
+    }));
+  };
+
+  const setDeviceFrameScale = (deviceType: DeviceType, frameScale: number) => {
+    const normalizedFrameScale = normalizeFrameScale(frameScale);
+    setFrameScalesByDevice((prev) => ({
+      ...prev,
+      [deviceType]: normalizedFrameScale,
+    }));
+    updateActiveScreenConfig((current) => ({
+      ...current,
+      frame_scales: {
+        ...current.frame_scales,
+        [deviceType]: normalizedFrameScale,
+      },
+    }));
+  };
+
+  const setDeviceFrameOffsets = (deviceType: DeviceType, offset: FrameOffset) => {
+    const normalizedOffset = normalizeFrameOffset(offset);
+    setFrameOffsetsByDevice((prev) => {
+      const current = normalizeFrameOffset(prev[deviceType]);
+      return {
+        ...prev,
+        [deviceType]: {
+          ...current,
+          x: normalizedOffset.x ?? current.x,
+          y: normalizedOffset.y ?? current.y,
+        },
+      };
+    });
+    updateActiveScreenConfig((current) => ({
+      ...current,
+      frame_offsets: {
+        ...current.frame_offsets,
+        [deviceType]: normalizedOffset,
+      },
+    }));
+  };
+
+  const resetPreviewDeviceFrameAdjustments = (deviceType: DeviceType) => {
+    setDeviceFrameScale(deviceType, 1);
+    setDeviceFrameOffsets(deviceType, { x: 0, y: 0 });
+    setPreviewFrameRectOverride(null);
+  };
+
+  const commitPreviewFrameTransform = (
+    deviceType: DeviceType,
+    nextRect: TemplateRect,
+    visualRegion: TemplateRect,
+    baseFrameSize: { width: number; height: number }
+  ) => {
+    const nextScale = normalizeFrameScale(nextRect.width / baseFrameSize.width);
+    const availableX = Math.max(0, visualRegion.width - nextRect.width);
+    const availableY = Math.max(0, visualRegion.height - nextRect.height);
+
+    setPreviewFrameRectOverride(nextRect);
+    setDeviceFrameScale(deviceType, nextScale);
+    setDeviceFrameOffsets(deviceType, {
+      x: availableX === 0 ? 0 : ((nextRect.left - visualRegion.left) / availableX) * 2 - 1,
+      y: availableY === 0 ? 0 : ((nextRect.top - visualRegion.top) / availableY) * 2 - 1,
+    });
+  };
+
+  const beginPreviewTransform = (
+    event: React.PointerEvent<HTMLDivElement>,
+    deviceType: DeviceType,
+    mode: 'move' | 'resize',
+    corner?: 'nw' | 'ne' | 'sw' | 'se'
+  ) => {
+    if (!previewLayout?.frameRect || !previewSurfaceRef.current) {
+      return;
+    }
+    const currentScale = normalizeFrameScale(frameScalesByDevice[deviceType]);
+    const startFrameRect = previewFrameRectOverride || previewLayout.frameRect;
+
+    dragSessionRef.current = {
+      pointerId: event.pointerId,
+      deviceType,
+      mode,
+      corner,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startFrameRect,
+      visualRegion: previewLayout.visualRegion,
+      canvas: previewLayout.canvas,
+      baseFrameSize: {
+        width: startFrameRect.width / currentScale,
+        height: startFrameRect.height / currentScale,
+      },
+    };
+    setPreviewTransformMode(mode);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+
+  const handlePreviewDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const session = dragSessionRef.current;
+    const surface = previewSurfaceRef.current;
+    if (!session || !surface || event.pointerId !== session.pointerId) {
+      return;
+    }
+
+    const surfaceRect = surface.getBoundingClientRect();
+    if (surfaceRect.width <= 0 || surfaceRect.height <= 0) {
+      return;
+    }
+
+    const deltaX =
+      ((event.clientX - session.startClientX) / surfaceRect.width) * session.canvas.width;
+    const deltaY =
+      ((event.clientY - session.startClientY) / surfaceRect.height) * session.canvas.height;
+    if (session.mode === 'move') {
+      const maxLeft =
+        session.visualRegion.left + session.visualRegion.width - session.startFrameRect.width;
+      const maxTop =
+        session.visualRegion.top + session.visualRegion.height - session.startFrameRect.height;
+      const nextLeft = Math.min(
+        Math.max(session.visualRegion.left, session.startFrameRect.left + deltaX),
+        maxLeft
+      );
+      const nextTop = Math.min(
+        Math.max(session.visualRegion.top, session.startFrameRect.top + deltaY),
+        maxTop
+      );
+
+      commitPreviewFrameTransform(
+        session.deviceType,
+        {
+          ...session.startFrameRect,
+          left: Math.round(nextLeft),
+          top: Math.round(nextTop),
+        },
+        session.visualRegion,
+        session.baseFrameSize
+      );
+      return;
+    }
+
+    if (!session.corner) {
+      return;
+    }
+
+    const start = session.startFrameRect;
+    const visualRight = session.visualRegion.left + session.visualRegion.width;
+    const visualBottom = session.visualRegion.top + session.visualRegion.height;
+    const anchor =
+      session.corner === 'nw'
+        ? { x: start.left + start.width, y: start.top + start.height }
+        : session.corner === 'ne'
+          ? { x: start.left, y: start.top + start.height }
+          : session.corner === 'sw'
+            ? { x: start.left + start.width, y: start.top }
+            : { x: start.left, y: start.top };
+    const rawWidth =
+      session.corner === 'nw' || session.corner === 'sw'
+        ? anchor.x - (start.left + deltaX)
+        : start.width + deltaX;
+    const rawHeight =
+      session.corner === 'nw' || session.corner === 'ne'
+        ? anchor.y - (start.top + deltaY)
+        : start.height + deltaY;
+    const minScale = FRAME_SCALE_MIN;
+    const maxScaleByRegion =
+      session.corner === 'nw'
+        ? Math.min(
+            (anchor.x - session.visualRegion.left) / session.baseFrameSize.width,
+            (anchor.y - session.visualRegion.top) / session.baseFrameSize.height
+          )
+        : session.corner === 'ne'
+          ? Math.min(
+              (visualRight - anchor.x) / session.baseFrameSize.width,
+              (anchor.y - session.visualRegion.top) / session.baseFrameSize.height
+            )
+          : session.corner === 'sw'
+            ? Math.min(
+                (anchor.x - session.visualRegion.left) / session.baseFrameSize.width,
+                (visualBottom - anchor.y) / session.baseFrameSize.height
+              )
+            : Math.min(
+                (visualRight - anchor.x) / session.baseFrameSize.width,
+                (visualBottom - anchor.y) / session.baseFrameSize.height
+              );
+    const nextScale = normalizeFrameScale(
+      Math.min(
+        Math.max(
+          minScale,
+          Math.min(rawWidth / session.baseFrameSize.width, rawHeight / session.baseFrameSize.height)
+        ),
+        Math.min(FRAME_SCALE_MAX, maxScaleByRegion)
+      )
+    );
+    const nextWidth = Math.round(session.baseFrameSize.width * nextScale);
+    const nextHeight = Math.round(session.baseFrameSize.height * nextScale);
+    const nextRect =
+      session.corner === 'nw'
+        ? {
+            left: Math.round(anchor.x - nextWidth),
+            top: Math.round(anchor.y - nextHeight),
+            width: nextWidth,
+            height: nextHeight,
+          }
+        : session.corner === 'ne'
+          ? {
+              left: Math.round(anchor.x),
+              top: Math.round(anchor.y - nextHeight),
+              width: nextWidth,
+              height: nextHeight,
+            }
+          : session.corner === 'sw'
+            ? {
+                left: Math.round(anchor.x - nextWidth),
+                top: Math.round(anchor.y),
+                width: nextWidth,
+                height: nextHeight,
+              }
+            : {
+                left: Math.round(anchor.x),
+                top: Math.round(anchor.y),
+                width: nextWidth,
+                height: nextHeight,
+              };
+
+    commitPreviewFrameTransform(
+      session.deviceType,
+      nextRect,
+      session.visualRegion,
+      session.baseFrameSize
+    );
+  };
+
+  const finishPreviewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const session = dragSessionRef.current;
+    if (!session || event.pointerId !== session.pointerId) {
+      return;
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragSessionRef.current = null;
+    setPreviewTransformMode(null);
   };
 
   const setTemplateBackgroundMode = (mode: TemplateBackground['mode']) => {
     setBackgroundMode(mode);
     setError(null);
     setBackgroundImageError(null);
+
+    updateActiveScreenConfig((current) => ({
+      ...current,
+      template_background:
+        mode === 'transparent'
+          ? { mode: 'transparent' }
+          : mode === 'solid'
+            ? { mode: 'solid', color: solidColor }
+            : mode === 'gradient'
+              ? { mode: 'gradient', from: gradientFrom, to: gradientTo, angle: 135 }
+              : backgroundImagePath
+                ? { mode: 'image', image_path: backgroundImagePath }
+                : current.template_background,
+    }));
   };
 
   const selectSolidColor = (value: string) => {
@@ -998,6 +1622,13 @@ export default function GeneratePage() {
     if (normalized) {
       setBackgroundMode('solid');
       setSolidColor(normalized);
+      updateActiveScreenConfig((current) => ({
+        ...current,
+        template_background: {
+          mode: 'solid',
+          color: normalized,
+        },
+      }));
     }
   };
 
@@ -1009,9 +1640,27 @@ export default function GeneratePage() {
     setGradientSuggestionError(null);
     if (key === 'from') {
       setGradientFrom(normalized);
+      updateActiveScreenConfig((current) => ({
+        ...current,
+        template_background: {
+          mode: 'gradient',
+          from: normalized,
+          to: gradientTo,
+          angle: 135,
+        },
+      }));
       return;
     }
     setGradientTo(normalized);
+    updateActiveScreenConfig((current) => ({
+      ...current,
+      template_background: {
+        mode: 'gradient',
+        from: gradientFrom,
+        to: normalized,
+        angle: 135,
+      },
+    }));
   };
 
   const selectGradientPreset = (from: string, to: string) => {
@@ -1019,6 +1668,15 @@ export default function GeneratePage() {
     setGradientSuggestionError(null);
     setGradientFrom(from.toUpperCase());
     setGradientTo(to.toUpperCase());
+    updateActiveScreenConfig((current) => ({
+      ...current,
+      template_background: {
+        mode: 'gradient',
+        from: from.toUpperCase(),
+        to: to.toUpperCase(),
+        angle: 135,
+      },
+    }));
   };
 
   const uploadBackgroundImage = async (file: File) => {
@@ -1047,6 +1705,13 @@ export default function GeneratePage() {
 
       setBackgroundImagePath(imagePath);
       setTemplateBackgroundMode('image');
+      updateActiveScreenConfig((current) => ({
+        ...current,
+        template_background: {
+          mode: 'image',
+          image_path: imagePath,
+        },
+      }));
     } catch (uploadError) {
       setBackgroundImageError(
         uploadError instanceof Error ? uploadError.message : 'Failed to upload background image'
@@ -1067,25 +1732,19 @@ export default function GeneratePage() {
   };
 
   const suggestGradientWithAi = async () => {
-    if (!app || selectedDevices.length === 0) {
+    if (!app || selectedDevices.length === 0 || !activeScreen) {
       setGradientSuggestionError('Select at least one device first.');
       return;
     }
 
     const suggestionDevice = selectedDevices[0];
     const suggestionLocale = selectedLocales[0] || previewLocale || 'en';
-    const suggestionScreen =
-      selectedScreens.find((screen) => screenHasDeviceVariant(screen, suggestionDevice)) ||
-      selectedScreens[0];
-    const suggestionVariant = suggestionScreen
-      ? findPreferredVariantForDeviceAndLocale(
-          suggestionScreen,
-          suggestionDevice,
-          suggestionLocale
-        ) || suggestionScreen.variants[0]
+    const suggestionVariant = screenHasDeviceVariant(activeScreen, suggestionDevice)
+      ? findPreferredVariantForDeviceAndLocale(activeScreen, suggestionDevice, suggestionLocale) ||
+        activeScreen.variants[0]
       : null;
 
-    if (!suggestionScreen || !suggestionVariant) {
+    if (!suggestionVariant) {
       setGradientSuggestionError('No screenshots found for this app.');
       return;
     }
@@ -1128,6 +1787,15 @@ export default function GeneratePage() {
       setBackgroundMode('gradient');
       setGradientFrom(fromColor);
       setGradientTo(toColor);
+      updateActiveScreenConfig((current) => ({
+        ...current,
+        template_background: {
+          mode: 'gradient',
+          from: fromColor,
+          to: toColor,
+          angle: 135,
+        },
+      }));
     } catch (suggestionError) {
       setGradientSuggestionError(
         suggestionError instanceof Error
@@ -1143,6 +1811,13 @@ export default function GeneratePage() {
     const normalized = normalizeHexColor(value);
     if (normalized) {
       setFontColor(normalized);
+      updateActiveScreenConfig((current) => ({
+        ...current,
+        text_style: {
+          ...current.text_style,
+          font_color: normalized,
+        },
+      }));
     }
   };
 
@@ -1155,6 +1830,13 @@ export default function GeneratePage() {
       Math.min(TEMPLATE_FONT_SIZE_LIMITS.max, Math.round(value))
     );
     setFontSize(clamped);
+    updateActiveScreenConfig((current) => ({
+      ...current,
+      text_style: {
+        ...current.text_style,
+        font_size: clamped,
+      },
+    }));
   };
 
   const updateSubtitleFontSize = (value: number) => {
@@ -1166,15 +1848,37 @@ export default function GeneratePage() {
       Math.min(TEMPLATE_SUBTITLE_FONT_SIZE_LIMITS.max, Math.round(value))
     );
     setSubtitleFontSize(clamped);
+    updateActiveScreenConfig((current) => ({
+      ...current,
+      text_style: {
+        ...current.text_style,
+        subtitle_size: clamped,
+      },
+    }));
   };
 
   const startGeneration = async () => {
-    if (backgroundMode === 'image' && !templateBackground) {
-      setError('Upload a background image before starting generation.');
-      return;
-    }
     if (selectedScreenIds.length === 0) {
       setError('Select at least one screen before starting generation.');
+      return;
+    }
+    const screenMissingLocales = selectedScreenIds.find(
+      (screenId) => (getScreenConfig(screenId).locales || []).length === 0
+    );
+    if (screenMissingLocales) {
+      setError(
+        `Select at least one locale for ${formatScreenLabel(screenMissingLocales)} before generating.`
+      );
+      return;
+    }
+    const screenMissingBackgroundImage = selectedScreenIds.find((screenId) => {
+      const screenBackground = getScreenConfig(screenId).template_background;
+      return screenBackground?.mode === 'image' && !screenBackground.image_path;
+    });
+    if (screenMissingBackgroundImage) {
+      setError(
+        `Upload a background image for ${formatScreenLabel(screenMissingBackgroundImage)} before generating.`
+      );
       return;
     }
 
@@ -1238,7 +1942,44 @@ export default function GeneratePage() {
     ).length;
     return total + variantCountForSelectedDevices;
   }, 0);
-  const estimatedOutputCount = selectedScreenVariantCount * selectedLocales.length;
+  const estimatedOutputCount = selectedScreens.reduce((total, screen) => {
+    const variantCountForSelectedDevices = selectedDevices.filter((deviceType) =>
+      screenHasDeviceVariant(screen, deviceType)
+    ).length;
+    const screenLocaleCount = getScreenConfig(screen.id).locales?.length || 0;
+    return total + variantCountForSelectedDevices * screenLocaleCount;
+  }, 0);
+  const hasMissingScreenLocales = selectedScreenIds.some(
+    (screenId) => (getScreenConfig(screenId).locales || []).length === 0
+  );
+  const hasMissingScreenBackgroundImage = selectedScreenIds.some((screenId) => {
+    const screenBackground = getScreenConfig(screenId).template_background;
+    return screenBackground?.mode === 'image' && !screenBackground.image_path;
+  });
+  const effectivePreviewFrameRect = previewFrameRectOverride || previewLayout?.frameRect;
+  const previewGuideRegion = previewLayout?.visualRegion;
+  const previewGuideCenter =
+    previewGuideRegion && effectivePreviewFrameRect
+      ? {
+          x: previewGuideRegion.left + previewGuideRegion.width / 2,
+          y: previewGuideRegion.top + previewGuideRegion.height / 2,
+          frameX: effectivePreviewFrameRect.left + effectivePreviewFrameRect.width / 2,
+          frameY: effectivePreviewFrameRect.top + effectivePreviewFrameRect.height / 2,
+        }
+      : null;
+  const previewCenterAlignedX =
+    previewGuideCenter && previewLayout
+      ? Math.abs(previewGuideCenter.x - previewGuideCenter.frameX) <=
+        previewLayout.canvas.width * 0.01
+      : false;
+  const previewCenterAlignedY =
+    previewGuideCenter && previewLayout
+      ? Math.abs(previewGuideCenter.y - previewGuideCenter.frameY) <=
+        previewLayout.canvas.height * 0.01
+      : false;
+  const previewAspectRatio = previewLayout
+    ? `${previewLayout.canvas.width} / ${previewLayout.canvas.height}`
+    : '9 / 16';
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-5xl">
@@ -1443,6 +2184,48 @@ export default function GeneratePage() {
 
         <Card>
           <CardHeader>
+            <CardTitle>Configure Selected Screen</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {selectedScreens.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Select at least one screen to configure per-screen export settings.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {selectedScreens.map((screen) => {
+                    const screenCopyByLocale = copies[screen.id] || {};
+                    const screenTitle =
+                      screenCopyByLocale.en?.title ||
+                      Object.values(screenCopyByLocale)[0]?.title ||
+                      `Screen ${screen.position + 1}`;
+
+                    return (
+                      <Button
+                        key={screen.id}
+                        type="button"
+                        variant={activeScreenId === screen.id ? 'default' : 'outline'}
+                        onClick={() => setActiveScreenId(screen.id)}
+                      >
+                        {`Screen ${screen.position + 1}: ${screenTitle}`}
+                      </Button>
+                    );
+                  })}
+                </div>
+                {activeScreen && (
+                  <p className="text-xs text-muted-foreground">
+                    Cards 3 through 7 below apply to{' '}
+                    <span className="font-medium">{`Screen ${activeScreen.position + 1}`}</span>.
+                  </p>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>3. Choose Frame Per Device</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -1527,28 +2310,29 @@ export default function GeneratePage() {
             <CardTitle>4. Select Languages</CardTitle>
           </CardHeader>
           <CardContent>
-            {availableLocales.length === 0 ? (
+            {activeScreenId !== null && activeScreenAvailableLocales.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No saved locales found. Add copy first in Manage Copies.
+                No saved locales found for this screen. Add copy first in Manage Copies.
               </p>
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm text-muted-foreground">
-                    {selectedLocales.length} of {availableLocales.length} language(s) selected
+                    {selectedLocales.length} of {activeScreenAvailableLocales.length} language(s)
+                    selected for this screen
                   </p>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     onClick={selectAllLocales}
-                    disabled={selectedLocales.length === availableLocales.length}
+                    disabled={selectedLocales.length === activeScreenAvailableLocales.length}
                   >
                     Select All
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {availableLocales.map((localeCode) => (
+                  {activeScreenAvailableLocales.map((localeCode) => (
                     <Button
                       key={localeCode}
                       size="sm"
@@ -1759,14 +2543,26 @@ export default function GeneratePage() {
               <Button
                 type="button"
                 variant={includeText ? 'default' : 'outline'}
-                onClick={() => setIncludeText(true)}
+                onClick={() => {
+                  setIncludeText(true);
+                  updateActiveScreenConfig((current) => ({
+                    ...current,
+                    include_text: true,
+                  }));
+                }}
               >
                 Include Text
               </Button>
               <Button
                 type="button"
                 variant={includeText ? 'outline' : 'default'}
-                onClick={() => setIncludeText(false)}
+                onClick={() => {
+                  setIncludeText(false);
+                  updateActiveScreenConfig((current) => ({
+                    ...current,
+                    include_text: false,
+                  }));
+                }}
               >
                 No Text
               </Button>
@@ -1799,7 +2595,16 @@ export default function GeneratePage() {
                       >
                         <DropdownMenuRadioGroup
                           value={fontFamily}
-                          onValueChange={(value) => setFontFamily(value as TemplateFontFamily)}
+                          onValueChange={(value) => {
+                            setFontFamily(value as TemplateFontFamily);
+                            updateActiveScreenConfig((current) => ({
+                              ...current,
+                              text_style: {
+                                ...current.text_style,
+                                font_family: value as TemplateFontFamily,
+                              },
+                            }));
+                          }}
                         >
                           {TEMPLATE_FONT_OPTIONS.map((font) => (
                             <DropdownMenuRadioItem
@@ -1913,55 +2718,178 @@ export default function GeneratePage() {
             <CardTitle>7. Preview</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="mx-auto mb-4 max-w-xs space-y-2">
-              {includeText ? (
-                <>
-                  <Label htmlFor="preview-locale">Preview locale</Label>
-                  {previewLocaleOptions.length > 0 ? (
-                    <select
-                      id="preview-locale"
-                      value={previewLocale}
-                      onChange={(event) => setPreviewLocale(event.target.value)}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    >
-                      {previewLocaleOptions.map((localeCode) => (
-                        <option key={localeCode} value={localeCode}>
-                          {localeLabel(localeCode)}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No copy available for the selected preview screen yet.
+            <div className="mx-auto mb-4 grid max-w-3xl gap-6 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)] lg:items-start">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="preview-device">Preview device</Label>
+                  <select
+                    id="preview-device"
+                    value={previewDevice || ''}
+                    onChange={(event) => setPreviewDevice(event.target.value as DeviceType)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    disabled={selectedDevices.length === 0}
+                  >
+                    {selectedDevices.map((deviceType) => (
+                      <option key={deviceType} value={deviceType}>
+                        {DEVICE_TYPE_LABELS[deviceType]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {includeText ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="preview-locale">Preview locale</Label>
+                    {previewLocaleOptions.length > 0 ? (
+                      <select
+                        id="preview-locale"
+                        value={previewLocale}
+                        onChange={(event) => setPreviewLocale(event.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        {previewLocaleOptions.map((localeCode) => (
+                          <option key={localeCode} value={localeCode}>
+                            {localeLabel(localeCode)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No copy available for the selected preview screen yet.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Preview locale selector is hidden because text overlay is disabled.
+                  </p>
+                )}
+
+                {previewDevice && (frameModesByDevice[previewDevice] || 'minimal') !== 'none' ? (
+                  <div className="space-y-4 rounded-xl border p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium">Frame adjustments</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => resetPreviewDeviceFrameAdjustments(previewDevice)}
+                      >
+                        Reset
+                      </Button>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Drag the device to reposition it, or drag any corner to resize it. Reset
+                      clears all manual frame edits.
                     </p>
-                  )}
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Preview locale selector is hidden because text overlay is disabled.
-                </p>
-              )}
-            </div>
-            {previewImage && (
-              <div className="relative aspect-[9/16] max-w-xs mx-auto rounded-md border bg-muted">
-                <Image
-                  src={previewImage}
-                  alt="Template preview"
-                  fill
-                  className="object-contain"
-                  unoptimized
-                />
-                {previewLoading && (
-                  <div className="absolute inset-x-2 top-2 rounded bg-background/85 px-2 py-1 text-center text-xs text-muted-foreground backdrop-blur-sm">
-                    Updating preview...
+                  </div>
+                ) : previewDevice ? (
+                  <p className="text-sm text-muted-foreground">
+                    Frame adjustments are unavailable while `No Frame` is selected for this device.
+                  </p>
+                ) : null}
+              </div>
+
+              <div>
+                {previewImage && (
+                  <div
+                    ref={previewSurfaceRef}
+                    className="relative mx-auto w-full max-w-md overflow-hidden rounded-md border bg-muted"
+                    style={{ aspectRatio: previewAspectRatio }}
+                  >
+                    <Image
+                      src={previewImage}
+                      alt="Template preview"
+                      fill
+                      className="object-contain"
+                      unoptimized
+                    />
+                    {previewLayout && previewGuideRegion && previewTransformMode && (
+                      <>
+                        <div
+                          className="pointer-events-none absolute border border-dashed border-white/70"
+                          style={rectToPercentageStyle(previewGuideRegion, previewLayout.canvas)}
+                        />
+                        <div
+                          className={`pointer-events-none absolute w-px ${
+                            previewCenterAlignedX ? 'bg-emerald-400' : 'bg-white/70'
+                          }`}
+                          style={{
+                            left: `${((previewGuideRegion.left + previewGuideRegion.width / 2) / previewLayout.canvas.width) * 100}%`,
+                            top: `${(previewGuideRegion.top / previewLayout.canvas.height) * 100}%`,
+                            height: `${(previewGuideRegion.height / previewLayout.canvas.height) * 100}%`,
+                          }}
+                        />
+                        <div
+                          className={`pointer-events-none absolute h-px ${
+                            previewCenterAlignedY ? 'bg-emerald-400' : 'bg-white/70'
+                          }`}
+                          style={{
+                            left: `${(previewGuideRegion.left / previewLayout.canvas.width) * 100}%`,
+                            top: `${((previewGuideRegion.top + previewGuideRegion.height / 2) / previewLayout.canvas.height) * 100}%`,
+                            width: `${(previewGuideRegion.width / previewLayout.canvas.width) * 100}%`,
+                          }}
+                        />
+                      </>
+                    )}
+                    {previewLayout && effectivePreviewFrameRect && previewDevice && (
+                      <div
+                        role="presentation"
+                        className={`absolute border-2 ${
+                          previewTransformMode === 'move'
+                            ? 'cursor-grabbing border-emerald-400'
+                            : 'cursor-grab border-white/80'
+                        } rounded-[18px] bg-transparent shadow-[0_0_0_1px_rgba(0,0,0,0.2)]`}
+                        style={rectToPercentageStyle(
+                          effectivePreviewFrameRect,
+                          previewLayout.canvas
+                        )}
+                        onPointerDown={(event) =>
+                          beginPreviewTransform(event, previewDevice, 'move')
+                        }
+                        onPointerMove={handlePreviewDragMove}
+                        onPointerUp={finishPreviewDrag}
+                        onPointerCancel={finishPreviewDrag}
+                      >
+                        <div className="pointer-events-none absolute inset-0 rounded-[16px] border border-black/15" />
+                        {(['nw', 'ne', 'sw', 'se'] as const).map((corner) => {
+                          const positionClass =
+                            corner === 'nw'
+                              ? '-left-2 -top-2 cursor-nwse-resize'
+                              : corner === 'ne'
+                                ? '-right-2 -top-2 cursor-nesw-resize'
+                                : corner === 'sw'
+                                  ? '-left-2 -bottom-2 cursor-nesw-resize'
+                                  : '-right-2 -bottom-2 cursor-nwse-resize';
+
+                          return (
+                            <div
+                              key={corner}
+                              role="presentation"
+                              className={`absolute h-4 w-4 rounded-full border-2 border-background bg-emerald-400 shadow ${positionClass}`}
+                              onPointerDown={(event) => {
+                                event.stopPropagation();
+                                beginPreviewTransform(event, previewDevice, 'resize', corner);
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                    {previewLoading && (
+                      <div className="absolute inset-x-2 top-2 rounded bg-background/85 px-2 py-1 text-center text-xs text-muted-foreground backdrop-blur-sm">
+                        Updating preview...
+                      </div>
+                    )}
                   </div>
                 )}
+                {!previewImage && previewLoading && (
+                  <p className="text-sm text-muted-foreground">Rendering preview...</p>
+                )}
+                {previewError && <p className="mt-3 text-sm text-destructive">{previewError}</p>}
               </div>
-            )}
-            {!previewImage && previewLoading && (
-              <p className="text-sm text-muted-foreground">Rendering preview...</p>
-            )}
-            {previewError && <p className="text-sm text-destructive">{previewError}</p>}
+            </div>
           </CardContent>
         </Card>
 
@@ -1969,8 +2897,8 @@ export default function GeneratePage() {
           <CardContent className="pt-6">
             <div className="text-center space-y-4">
               <div className="text-sm text-muted-foreground">
-                {selectedScreenVariantCount} selected screen-device variant(s) ×{' '}
-                {selectedLocales.length} locale(s) = {estimatedOutputCount} output image(s)
+                {selectedScreenVariantCount} selected screen-device variant(s) across{' '}
+                {selectedScreenIds.length} screen(s) = {estimatedOutputCount} output image(s)
               </div>
               <Button
                 size="lg"
@@ -1978,10 +2906,10 @@ export default function GeneratePage() {
                 disabled={
                   generating ||
                   selectedDevices.length === 0 ||
-                  selectedLocales.length === 0 ||
                   selectedScreenIds.length === 0 ||
                   backgroundImageUploading ||
-                  (backgroundMode === 'image' && !templateBackground)
+                  hasMissingScreenLocales ||
+                  hasMissingScreenBackgroundImage
                 }
                 className="w-full max-w-md"
               >

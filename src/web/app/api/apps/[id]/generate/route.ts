@@ -45,6 +45,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       frame_mode: validated.frame_mode,
       frame_modes: validated.frame_modes,
       frame_asset_files: validated.frame_asset_files,
+      frame_scales: validated.frame_scales,
+      frame_offsets: validated.frame_offsets,
+      screen_configs: validated.screen_configs,
     });
 
     // Start generation asynchronously

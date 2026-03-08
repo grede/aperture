@@ -5,10 +5,12 @@
 import { TemplateEngine } from '../../templates/engine';
 import { ensureWebEnvLoaded } from '../lib/env';
 import type {
+  CompositeLayoutMetadata,
   TemplateStyle,
   TemplateDeviceType,
   TemplateFrameMode,
   TemplateBackground,
+  TemplateFrameOffset,
   TemplateTextStyle,
 } from '../../types';
 
@@ -49,7 +51,9 @@ export class TemplateService {
     subtitle: string,
     locale: string,
     frameMode: TemplateFrameMode = 'minimal',
-    frameAssetFile?: string
+    frameAssetFile?: string,
+    frameScale?: number,
+    frameOffset?: TemplateFrameOffset
   ): Promise<Buffer> {
     return this.engine.composite({
       screenshot: screenshotBuffer,
@@ -63,6 +67,8 @@ export class TemplateService {
       subtitle,
       locale,
       frameMode,
+      frameScale,
+      frameOffset,
       frameAssetsDir: process.env.FRAME_ASSETS_DIR,
       realisticFrameFile: frameAssetFile,
     });
@@ -99,9 +105,11 @@ export class TemplateService {
     title: string,
     subtitle: string,
     frameMode: TemplateFrameMode = 'minimal',
-    frameAssetFile?: string
-  ): Promise<Buffer> {
-    return this.engine.composite({
+    frameAssetFile?: string,
+    frameScale?: number,
+    frameOffset?: TemplateFrameOffset
+  ): Promise<{ image: Buffer; layout: CompositeLayoutMetadata }> {
+    return this.engine.compositeWithLayout({
       screenshot: screenshotBuffer,
       style,
       background,
@@ -113,6 +121,8 @@ export class TemplateService {
       subtitle: subtitle || undefined,
       locale: 'en', // Preview always in English
       frameMode,
+      frameScale,
+      frameOffset,
       frameAssetsDir: process.env.FRAME_ASSETS_DIR,
       realisticFrameFile: frameAssetFile,
     });

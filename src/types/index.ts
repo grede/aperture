@@ -163,6 +163,27 @@ export interface TemplateTextStyle {
   fontColor?: string;
 }
 
+export interface TemplateFrameOffset {
+  x?: number;
+  y?: number;
+}
+
+export interface TemplateRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export interface CompositeLayoutMetadata {
+  canvas: {
+    width: number;
+    height: number;
+  };
+  visualRegion: TemplateRect;
+  frameRect?: TemplateRect;
+}
+
 export interface CompositeOptions {
   screenshot: Buffer;
   style: TemplateStyle;
@@ -175,6 +196,8 @@ export interface CompositeOptions {
   subtitle?: string;
   locale: string;
   frameMode?: TemplateFrameMode;
+  frameScale?: number;
+  frameOffset?: TemplateFrameOffset;
   frameAssetsDir?: string;
   realisticFrameFile?: string;
 }

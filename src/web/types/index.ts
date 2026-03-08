@@ -104,6 +104,27 @@ export type FrameMode = 'none' | 'minimal' | 'realistic';
  */
 export type FrameModesByDevice = Partial<Record<DeviceType, FrameMode>>;
 export type FrameAssetFilesByDevice = Partial<Record<DeviceType, string>>;
+export type FrameScalesByDevice = Partial<Record<DeviceType, number>>;
+export type FrameOffset = { x?: number; y?: number };
+export type FrameOffsetsByDevice = Partial<Record<DeviceType, FrameOffset>>;
+export type TemplateRect = { left: number; top: number; width: number; height: number };
+export type PreviewLayoutMetadata = {
+  canvas: { width: number; height: number };
+  visualRegion: TemplateRect;
+  frameRect?: TemplateRect;
+};
+
+export interface ScreenGenerationConfig {
+  locales?: string[];
+  template_background?: TemplateBackground;
+  include_text?: boolean;
+  text_style?: TemplateTextStyle;
+  frame_mode?: FrameMode;
+  frame_modes?: FrameModesByDevice;
+  frame_asset_files?: FrameAssetFilesByDevice;
+  frame_scales?: FrameScalesByDevice;
+  frame_offsets?: FrameOffsetsByDevice;
+}
 
 /**
  * App entity
@@ -182,6 +203,9 @@ export interface GenerationConfig {
   frame_mode: FrameMode;
   frame_modes?: FrameModesByDevice;
   frame_asset_files?: FrameAssetFilesByDevice;
+  frame_scales?: FrameScalesByDevice;
+  frame_offsets?: FrameOffsetsByDevice;
+  screen_configs?: Partial<Record<number, ScreenGenerationConfig>>;
 }
 
 /**
@@ -296,6 +320,9 @@ export interface StartGenerationRequest {
   frame_mode: FrameMode;
   frame_modes?: FrameModesByDevice;
   frame_asset_files?: FrameAssetFilesByDevice;
+  frame_scales?: FrameScalesByDevice;
+  frame_offsets?: FrameOffsetsByDevice;
+  screen_configs?: Partial<Record<number, ScreenGenerationConfig>>;
 }
 
 /**

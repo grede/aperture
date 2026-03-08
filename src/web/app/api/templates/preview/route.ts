@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     // Generate preview
     const templateService = getTemplateService();
-    const previewBuffer = await templateService.generatePreview(
+    const previewResult = await templateService.generatePreview(
       screenshotBuffer,
       validated.style,
       validated.template_background,
@@ -50,20 +50,25 @@ export async function POST(request: NextRequest) {
       validated.title,
       validated.subtitle || '',
       validated.frame_mode,
-      validated.frame_asset_file
+      validated.frame_asset_file,
+      validated.frame_scale,
+      validated.frame_offset
     );
 
     // Return as base64
-    const previewBase64 = previewBuffer.toString('base64');
+    const previewBase64 = previewResult.image.toString('base64');
 
     return successResponse({
       image_base64: previewBase64,
+      layout: previewResult.layout,
       style: validated.style,
       template_background: validated.template_background,
       include_text: validated.include_text,
       text_style: validated.text_style,
       frame_mode: validated.frame_mode,
       frame_asset_file: validated.frame_asset_file,
+      frame_scale: validated.frame_scale,
+      frame_offset: validated.frame_offset,
     });
   } catch (error) {
     return handleApiError(error);
