@@ -146,6 +146,10 @@ function normalizeHexColor(value: string): string | null {
   return trimmed.toUpperCase();
 }
 
+function resolveHexColor(value: string | null | undefined, fallback: string): string {
+  return normalizeHexColor(value ?? '') || fallback;
+}
+
 function localeLabel(code: string): string {
   return SUPPORTED_LOCALES.find((locale) => locale.code === code)?.name || code;
 }
@@ -243,6 +247,24 @@ function rectToPercentageStyle(rect: TemplateRect, canvas: PreviewLayoutMetadata
     top: `${(rect.top / canvas.height) * 100}%`,
     width: `${(rect.width / canvas.width) * 100}%`,
     height: `${(rect.height / canvas.height) * 100}%`,
+  };
+}
+
+function resolveFrameTransformFromRect(
+  nextRect: TemplateRect,
+  visualRegion: TemplateRect,
+  baseFrameSize: { width: number; height: number }
+) {
+  const nextScale = normalizeFrameScale(nextRect.width / baseFrameSize.width);
+  const availableX = Math.max(0, visualRegion.width - nextRect.width);
+  const availableY = Math.max(0, visualRegion.height - nextRect.height);
+
+  return {
+    scale: nextScale,
+    offset: {
+      x: availableX === 0 ? 0 : ((nextRect.left - visualRegion.left) / availableX) * 2 - 1,
+      y: availableY === 0 ? 0 : ((nextRect.top - visualRegion.top) / availableY) * 2 - 1,
+    },
   };
 }
 
@@ -389,6 +411,7 @@ export default function GeneratePage() {
   const previewRequestIdRef = useRef(0);
   const previewSurfaceRef = useRef<HTMLDivElement | null>(null);
   const dragSessionRef = useRef<DragSession | null>(null);
+  const previewFrameRectOverrideRef = useRef<TemplateRect | null>(null);
 
   const availableDevices = useMemo(() => {
     if (!app) return [];
@@ -584,7 +607,7 @@ export default function GeneratePage() {
     if (backgroundMode === 'solid') {
       return {
         mode: 'solid',
-        color: solidColor,
+        color: resolveHexColor(solidColor, '#4A90E2'),
       };
     }
 
@@ -601,8 +624,8 @@ export default function GeneratePage() {
 
     return {
       mode: 'gradient',
-      from: gradientFrom,
-      to: gradientTo,
+      from: resolveHexColor(gradientFrom, '#4A90E2'),
+      to: resolveHexColor(gradientTo, '#7B68EE'),
       angle: 135,
     };
   }, [backgroundMode, solidColor, gradientFrom, gradientTo, backgroundImagePath]);
@@ -618,7 +641,7 @@ export default function GeneratePage() {
       };
     }
     if (backgroundMode === 'solid') {
-      return { backgroundColor: solidColor };
+      return { backgroundColor: resolveHexColor(solidColor, '#4A90E2') };
     }
     if (backgroundMode === 'image') {
       if (!backgroundImagePath) {
@@ -631,7 +654,10 @@ export default function GeneratePage() {
       };
     }
     return {
-      backgroundImage: `linear-gradient(135deg, ${gradientFrom} 0%, ${gradientTo} 100%)`,
+      backgroundImage: `linear-gradient(135deg, ${resolveHexColor(
+        gradientFrom,
+        '#4A90E2'
+      )} 0%, ${resolveHexColor(gradientTo, '#7B68EE')} 100%)`,
     };
   }, [backgroundMode, solidColor, gradientFrom, gradientTo, backgroundImagePath]);
 
@@ -640,7 +666,7 @@ export default function GeneratePage() {
       font_family: fontFamily,
       font_size: fontSize,
       subtitle_size: subtitleFontSize,
-      font_color: fontColor,
+      font_color: resolveHexColor(fontColor, '#FFFFFF'),
     }),
     [fontFamily, fontSize, subtitleFontSize, fontColor]
   );
@@ -790,13 +816,22 @@ export default function GeneratePage() {
     setSelectedLocales(activeConfig.locales || getDefaultLocalesForScreen(activeScreenId));
     setBackgroundMode(activeBackground?.mode || 'solid');
     setSolidColor(
-      (activeBackground?.mode === 'solid' ? activeBackground.color : '#4A90E2').toUpperCase()
+      resolveHexColor(
+        activeBackground?.mode === 'solid' ? activeBackground.color : undefined,
+        '#4A90E2'
+      )
     );
     setGradientFrom(
-      (activeBackground?.mode === 'gradient' ? activeBackground.from : '#4A90E2').toUpperCase()
+      resolveHexColor(
+        activeBackground?.mode === 'gradient' ? activeBackground.from : undefined,
+        '#4A90E2'
+      )
     );
     setGradientTo(
-      (activeBackground?.mode === 'gradient' ? activeBackground.to : '#7B68EE').toUpperCase()
+      resolveHexColor(
+        activeBackground?.mode === 'gradient' ? activeBackground.to : undefined,
+        '#7B68EE'
+      )
     );
     setBackgroundImagePath(activeBackground?.mode === 'image' ? activeBackground.image_path : null);
     setBackgroundImageError(null);
@@ -804,12 +839,12 @@ export default function GeneratePage() {
     setFontFamily(activeConfig.text_style?.font_family || 'system');
     setFontSize(activeConfig.text_style?.font_size ?? 52);
     setSubtitleFontSize(activeConfig.text_style?.subtitle_size ?? 29);
-    setFontColor((activeConfig.text_style?.font_color || '#FFFFFF').toUpperCase());
+    setFontColor(resolveHexColor(activeConfig.text_style?.font_color, '#FFFFFF'));
     setFrameModesByDevice(activeConfig.frame_modes || {});
     setSelectedFrameAssetFilesByDevice(activeConfig.frame_asset_files || {});
     setFrameScalesByDevice(activeConfig.frame_scales || {});
     setFrameOffsetsByDevice(activeConfig.frame_offsets || {});
-    setPreviewFrameRectOverride(null);
+    setPreviewFrameRectDraft(null);
   }, [activeScreenId, getDefaultLocalesForScreen, getScreenConfig]);
 
   useEffect(() => {
@@ -907,7 +942,7 @@ export default function GeneratePage() {
       if (!app || !previewDevice) {
         setPreviewImage(null);
         setPreviewLayout(null);
-        setPreviewFrameRectOverride(null);
+        setPreviewFrameRectDraft(null);
         setPreviewError(null);
         setPreviewLoading(false);
         return;
@@ -916,7 +951,7 @@ export default function GeneratePage() {
       if (!previewScreen) {
         setPreviewImage(null);
         setPreviewLayout(null);
-        setPreviewFrameRectOverride(null);
+        setPreviewFrameRectDraft(null);
         setPreviewError(null);
         setPreviewLoading(false);
         return;
@@ -926,7 +961,7 @@ export default function GeneratePage() {
         setPreviewError('No screenshot found for the selected preview device.');
         setPreviewImage(null);
         setPreviewLayout(null);
-        setPreviewFrameRectOverride(null);
+        setPreviewFrameRectDraft(null);
         setPreviewLoading(false);
         return;
       }
@@ -940,7 +975,7 @@ export default function GeneratePage() {
         setPreviewError('Add at least one copy before generating preview.');
         setPreviewImage(null);
         setPreviewLayout(null);
-        setPreviewFrameRectOverride(null);
+        setPreviewFrameRectDraft(null);
         setPreviewLoading(false);
         return;
       }
@@ -949,7 +984,7 @@ export default function GeneratePage() {
         setPreviewError('Upload a background image to render preview.');
         setPreviewImage(null);
         setPreviewLayout(null);
-        setPreviewFrameRectOverride(null);
+        setPreviewFrameRectDraft(null);
         setPreviewLoading(false);
         return;
       }
@@ -1009,7 +1044,7 @@ export default function GeneratePage() {
         }
         setPreviewImage(`data:image/png;base64,${payload.data.image_base64}`);
         setPreviewLayout((payload.data.layout as PreviewLayoutMetadata | undefined) || null);
-        setPreviewFrameRectOverride(null);
+        setPreviewFrameRectDraft(null);
       } catch (previewGenerationError) {
         if (previewRequestIdRef.current !== requestId) {
           return;
@@ -1393,28 +1428,19 @@ export default function GeneratePage() {
     }));
   };
 
+  const setPreviewFrameRectDraft = (nextRect: TemplateRect | null) => {
+    previewFrameRectOverrideRef.current = nextRect;
+    setPreviewFrameRectOverride(nextRect);
+  };
+
   const resetPreviewDeviceFrameAdjustments = (deviceType: DeviceType) => {
     setDeviceFrameScale(deviceType, 1);
     setDeviceFrameOffsets(deviceType, { x: 0, y: 0 });
-    setPreviewFrameRectOverride(null);
+    setPreviewFrameRectDraft(null);
   };
 
-  const commitPreviewFrameTransform = (
-    deviceType: DeviceType,
-    nextRect: TemplateRect,
-    visualRegion: TemplateRect,
-    baseFrameSize: { width: number; height: number }
-  ) => {
-    const nextScale = normalizeFrameScale(nextRect.width / baseFrameSize.width);
-    const availableX = Math.max(0, visualRegion.width - nextRect.width);
-    const availableY = Math.max(0, visualRegion.height - nextRect.height);
-
-    setPreviewFrameRectOverride(nextRect);
-    setDeviceFrameScale(deviceType, nextScale);
-    setDeviceFrameOffsets(deviceType, {
-      x: availableX === 0 ? 0 : ((nextRect.left - visualRegion.left) / availableX) * 2 - 1,
-      y: availableY === 0 ? 0 : ((nextRect.top - visualRegion.top) / availableY) * 2 - 1,
-    });
+  const updatePreviewFrameTransform = (nextRect: TemplateRect) => {
+    setPreviewFrameRectDraft(nextRect);
   };
 
   const beginPreviewTransform = (
@@ -1479,16 +1505,11 @@ export default function GeneratePage() {
         maxTop
       );
 
-      commitPreviewFrameTransform(
-        session.deviceType,
-        {
-          ...session.startFrameRect,
-          left: Math.round(nextLeft),
-          top: Math.round(nextTop),
-        },
-        session.visualRegion,
-        session.baseFrameSize
-      );
+      updatePreviewFrameTransform({
+        ...session.startFrameRect,
+        left: Math.round(nextLeft),
+        top: Math.round(nextTop),
+      });
       return;
     }
 
@@ -1576,12 +1597,7 @@ export default function GeneratePage() {
                 height: nextHeight,
               };
 
-    commitPreviewFrameTransform(
-      session.deviceType,
-      nextRect,
-      session.visualRegion,
-      session.baseFrameSize
-    );
+    updatePreviewFrameTransform(nextRect);
   };
 
   const finishPreviewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1593,6 +1609,14 @@ export default function GeneratePage() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    const nextRect = previewFrameRectOverrideRef.current || session.startFrameRect;
+    const nextTransform = resolveFrameTransformFromRect(
+      nextRect,
+      session.visualRegion,
+      session.baseFrameSize
+    );
+    setDeviceFrameScale(session.deviceType, nextTransform.scale);
+    setDeviceFrameOffsets(session.deviceType, nextTransform.offset);
     dragSessionRef.current = null;
     setPreviewTransformMode(null);
   };
@@ -1601,6 +1625,10 @@ export default function GeneratePage() {
     setBackgroundMode(mode);
     setError(null);
     setBackgroundImageError(null);
+
+    if (mode === 'image' && !backgroundImagePath) {
+      return;
+    }
 
     updateActiveScreenConfig((current) => ({
       ...current,
@@ -2404,11 +2432,15 @@ export default function GeneratePage() {
                   <input
                     id="template-solid-color"
                     type="color"
-                    value={solidColor}
+                    value={resolveHexColor(solidColor, '#4A90E2')}
                     onChange={(event) => selectSolidColor(event.target.value)}
                     className="h-10 w-12 cursor-pointer rounded border border-input bg-background p-1"
                   />
-                  <Input value={solidColor} readOnly className="max-w-[180px] font-mono" />
+                  <Input
+                    value={resolveHexColor(solidColor, '#4A90E2')}
+                    readOnly
+                    className="max-w-[180px] font-mono"
+                  />
                 </div>
                 <div className="grid grid-cols-6 gap-2 sm:grid-cols-9">
                   {SOLID_COLOR_PRESETS.map((preset) => (
@@ -2417,7 +2449,7 @@ export default function GeneratePage() {
                       type="button"
                       onClick={() => selectSolidColor(preset)}
                       className={`h-8 w-8 rounded border ${
-                        solidColor === preset.toUpperCase()
+                        resolveHexColor(solidColor, '#4A90E2') === preset.toUpperCase()
                           ? 'border-primary ring-2 ring-primary/30'
                           : 'border-input'
                       }`}
@@ -2436,11 +2468,15 @@ export default function GeneratePage() {
                       <input
                         id="template-gradient-from"
                         type="color"
-                        value={gradientFrom}
+                        value={resolveHexColor(gradientFrom, '#4A90E2')}
                         onChange={(event) => setGradientStop('from', event.target.value)}
                         className="h-10 w-12 cursor-pointer rounded border border-input bg-background p-1"
                       />
-                      <Input value={gradientFrom} readOnly className="font-mono" />
+                      <Input
+                        value={resolveHexColor(gradientFrom, '#4A90E2')}
+                        readOnly
+                        className="font-mono"
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -2449,11 +2485,15 @@ export default function GeneratePage() {
                       <input
                         id="template-gradient-to"
                         type="color"
-                        value={gradientTo}
+                        value={resolveHexColor(gradientTo, '#7B68EE')}
                         onChange={(event) => setGradientStop('to', event.target.value)}
                         className="h-10 w-12 cursor-pointer rounded border border-input bg-background p-1"
                       />
-                      <Input value={gradientTo} readOnly className="font-mono" />
+                      <Input
+                        value={resolveHexColor(gradientTo, '#7B68EE')}
+                        readOnly
+                        className="font-mono"
+                      />
                     </div>
                   </div>
                 </div>
@@ -2478,8 +2518,8 @@ export default function GeneratePage() {
                 <div className="grid gap-2 sm:grid-cols-2">
                   {GRADIENT_PRESETS.map((preset) => {
                     const isSelected =
-                      gradientFrom === preset.from.toUpperCase() &&
-                      gradientTo === preset.to.toUpperCase();
+                      resolveHexColor(gradientFrom, '#4A90E2') === preset.from.toUpperCase() &&
+                      resolveHexColor(gradientTo, '#7B68EE') === preset.to.toUpperCase();
 
                     return (
                       <button
@@ -2681,11 +2721,15 @@ export default function GeneratePage() {
                       <input
                         id="template-font-color"
                         type="color"
-                        value={fontColor}
+                        value={resolveHexColor(fontColor, '#FFFFFF')}
                         onChange={(event) => selectFontColor(event.target.value)}
                         className="h-10 w-12 cursor-pointer rounded border border-input bg-background p-1"
                       />
-                      <Input value={fontColor} readOnly className="font-mono" />
+                      <Input
+                        value={resolveHexColor(fontColor, '#FFFFFF')}
+                        readOnly
+                        className="font-mono"
+                      />
                     </div>
                   </div>
                 </div>
@@ -2694,7 +2738,7 @@ export default function GeneratePage() {
                   className="rounded-lg border p-4 text-center"
                   style={{
                     fontFamily: FONT_PREVIEW_STACKS[fontFamily],
-                    color: fontColor,
+                    color: resolveHexColor(fontColor, '#FFFFFF'),
                   }}
                 >
                   <p className="font-bold leading-tight" style={{ fontSize: `${fontSize}px` }}>

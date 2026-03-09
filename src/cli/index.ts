@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import chalk from 'chalk';
 import { initCommand } from './commands/init.js';
 import { flowCommand } from './commands/flow.js';
 import { doctorCommand } from './commands/doctor.js';
@@ -10,6 +9,8 @@ import { runCommand } from './commands/run.js';
 import { exportCommand } from './commands/export.js';
 import { generateDataCommand } from './commands/generate-data.js';
 import { generateCopyCommand } from './commands/generate-copy.js';
+import { convertImagesCommand } from './commands/convert-images.js';
+import { resizeImagesCommand } from './commands/resize-images.js';
 
 const program = new Command();
 
@@ -89,6 +90,32 @@ program
   .option('--model <model>', 'Override LLM model (e.g., gpt-4o, gpt-4o-mini)')
   .option('--description <text>', 'Override app description from config')
   .action(generateCopyCommand);
+
+// Convert-images command
+program
+  .command('convert-images <input>')
+  .description('Convert PNG images to JPG and flatten alpha channels')
+  .option('--output <path>', 'Output file or directory (defaults to next to the source PNGs)')
+  .option('--quality <number>', 'JPEG quality from 1 to 100', '92')
+  .option('--background <color>', 'Background color used when flattening transparency', '#ffffff')
+  .option('--overwrite', 'Overwrite existing JPG files')
+  .option('--no-recursive', 'Do not scan subfolders when the input is a directory')
+  .action(convertImagesCommand);
+
+// Resize-images command
+program
+  .command('resize-images <input>')
+  .description('Batch-resize images to a target size')
+  .requiredOption('--size <dimensions>', 'Target size in WIDTHxHEIGHT format, for example 100x100')
+  .option(
+    '--output <path>',
+    'Output file or directory (defaults to creating suffixed files next to the source)'
+  )
+  .option('--fit <mode>', 'Resize fit mode (contain|cover|fill|inside|outside)', 'fill')
+  .option('--background <color>', 'Background color used by fit modes that add padding', '#ffffff')
+  .option('--overwrite', 'Overwrite existing output files')
+  .option('--no-recursive', 'Do not scan subfolders when the input is a directory')
+  .action(resizeImagesCommand);
 
 // Parse arguments
 program.parse();

@@ -11,13 +11,13 @@ Aperture is an AI-powered CLI tool that automates App Store screenshot generatio
 ```yaml
 steps:
   - action: navigate
-    instruction: "Open the main screen showing the list of groups"
+    instruction: 'Open the main screen showing the list of groups'
   - action: screenshot
-    label: "group_list"
+    label: 'group_list'
   - action: navigate
-    instruction: "Open the first group chat"
+    instruction: 'Open the first group chat'
   - action: screenshot
-    label: "group_chat"
+    label: 'group_chat'
 ```
 
 2. **Run Aperture:**
@@ -31,8 +31,9 @@ aperture run
 ## The AI Agent
 
 For each `navigate` step, Aperture's AI agent:
+
 - Reads the current screen state (accessibility tree) via an MCP server
-- Asks an LLM: *"Given this screen, how do I get to: [your instruction]?"*
+- Asks an LLM: _"Given this screen, how do I get to: [your instruction]?"_
 - Executes the action (tap, type, scroll, swipe)
 - Verifies the goal was reached
 - Repeats until done — adapting to any UI state, onboarding flows, or layout differences
@@ -127,6 +128,7 @@ npm run server
 ```
 
 Standalone backend defaults:
+
 - Health: `http://localhost:3000/health`
 - API base: `http://localhost:3000/api`
 - API auth header: `x-api-key` (defaults to `aperture-dev-key` unless `API_KEY` is set)
@@ -140,22 +142,50 @@ Standalone backend defaults:
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `aperture init` | Interactive setup wizard |
-| `aperture run` | Execute flow and capture screenshots |
-| `aperture export` | Composite screenshots into store-ready images |
-| `aperture generate-data` | Generate locale-specific test data |
-| `aperture generate-copy` | Generate localized marketing copy |
+| Command                           | Description                                             |
+| --------------------------------- | ------------------------------------------------------- |
+| `aperture init`                   | Interactive setup wizard                                |
+| `aperture run`                    | Execute flow and capture screenshots                    |
+| `aperture export`                 | Composite screenshots into store-ready images           |
+| `aperture generate-data`          | Generate locale-specific test data                      |
+| `aperture generate-copy`          | Generate localized marketing copy                       |
+| `aperture convert-images <input>` | Batch-convert PNG files to JPG and flatten transparency |
+| `aperture resize-images <input>`  | Batch-resize images to a target size                    |
+
+### Image Conversion
+
+Use `aperture convert-images` when you need JPG output without alpha channels.
+
+```bash
+# Convert one PNG next to the source file
+aperture convert-images ./shots/screen.png
+
+# Convert a whole folder recursively into a separate output directory
+aperture convert-images ./shots --output ./shots-jpg
+```
+
+### Image Resizing
+
+Use `aperture resize-images` when you need to resize one image or a whole tree of images.
+
+```bash
+# Resize one image and write screen-100x100.png next to it
+aperture resize-images ./shots/screen.png --size 100x100
+
+# Resize a whole folder into a separate output directory
+aperture resize-images ./shots --size 1290x2796 --output ./shots-resized
+```
 
 ### Export Frame Modes
 
 `aperture export` supports:
+
 - `--frame minimal` (default): generated vector frames for iPhone, iPad, Android
 - `--frame none`: screenshot-only layout
 - `--frame realistic`: loads device frame assets from `template.frame.assetsDir` or `--frame-assets`
 
 Realistic assets expect per-device files:
+
 - `iphone.png` + `iphone.json`
 - `ipad.png` + `ipad.json`
 - `android.png` + `android.json`
