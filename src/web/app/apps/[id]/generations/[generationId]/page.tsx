@@ -120,6 +120,8 @@ export default function GenerationResultsPage() {
   }, [generation, screenOrderById, screenPrimaryDeviceById]);
   const isProcessing =
     generation?.status === 'pending' || generation?.status === 'processing';
+  const usesTransparentBackground =
+    generation?.config.template_background?.mode === 'transparent';
 
   const screenLabel = (screenId: number) => `Screen ${screenOrderById.get(screenId) ?? screenId}`;
   const downloadArchive = (locale?: string) => {
@@ -199,6 +201,12 @@ export default function GenerationResultsPage() {
               Download All
             </Button>
           </div>
+          {usesTransparentBackground && (
+            <p className="mb-4 text-sm text-muted-foreground">
+              Transparent exports are previewed on a checkerboard here. Downloaded PNGs keep alpha
+              outside the composed screenshot.
+            </p>
+          )}
           <div className="space-y-8">
             {groupedScreenshots.map((group) => (
               <div key={group.locale}>
@@ -226,7 +234,7 @@ export default function GenerationResultsPage() {
                             isTabletDevice(screenshotDeviceType)
                               ? 'aspect-[3/4]'
                               : 'aspect-[9/16]'
-                          } bg-muted`}
+                          } ${usesTransparentBackground ? 'transparent-preview-surface' : 'bg-muted'}`}
                         >
                           <Image
                             src={`/api/generated-images/${screenshot.output_path}`}

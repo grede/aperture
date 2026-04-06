@@ -2423,7 +2423,8 @@ export default function GeneratePage() {
 
             {backgroundMode === 'transparent' ? (
               <p className="text-sm text-muted-foreground">
-                Exported PNGs will keep a transparent background (alpha channel).
+                Exported PNGs keep alpha outside the composed screenshot. The frame and screenshot
+                content remain opaque.
               </p>
             ) : backgroundMode === 'solid' ? (
               <div className="space-y-3">
@@ -2839,7 +2840,9 @@ export default function GeneratePage() {
                 {previewImage && (
                   <div
                     ref={previewSurfaceRef}
-                    className="relative mx-auto w-full max-w-md overflow-hidden rounded-md border bg-muted"
+                    className={`relative mx-auto w-full max-w-md overflow-hidden rounded-md border ${
+                      backgroundMode === 'transparent' ? 'transparent-preview-surface' : 'bg-muted'
+                    }`}
                     style={{ aspectRatio: previewAspectRatio }}
                   >
                     <Image
