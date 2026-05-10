@@ -11,6 +11,7 @@ import { generateDataCommand } from './commands/generate-data.js';
 import { generateCopyCommand } from './commands/generate-copy.js';
 import { convertImagesCommand } from './commands/convert-images.js';
 import { resizeImagesCommand } from './commands/resize-images.js';
+import { frameCommand } from './commands/frame.js';
 
 const program = new Command();
 
@@ -71,6 +72,18 @@ program
   .option('--frame <mode>', 'Frame mode (none|minimal|realistic)')
   .option('--frame-assets <dir>', 'Path to realistic frame assets directory')
   .action(exportCommand);
+
+// Frame command
+program
+  .command('frame [input]')
+  .description('Apply a device frame to one image or a folder of images')
+  .option('--device-frame <file>', 'Device frame file from device_frames')
+  .option('--frame-assets <dir>', 'Path to device frame assets directory')
+  .option('--output <path>', 'Output file or directory (defaults to suffixed PNGs next to input)')
+  .option('--overwrite', 'Overwrite existing framed PNG files')
+  .option('--no-recursive', 'Do not scan subfolders when the input is a directory')
+  .option('--list-frames', 'List available device frame files')
+  .action(frameCommand);
 
 // Generate-data command
 program

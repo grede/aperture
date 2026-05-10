@@ -7,6 +7,14 @@
   "bin": {
     "aperture": "dist/cli/index.js"
   },
+  "files": [
+    "dist",
+    "device_frames",
+    "README.md",
+    "GETTING_STARTED.md",
+    "aperture.config.example.yaml",
+    "aperture-flow.example.yaml"
+  ],
   "scripts": {
     "dev": "tsx watch src/cli/index.ts",
     "dev:server": "tsx watch src/server/app.ts",

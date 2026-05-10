@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'fs/promises';
-import { join, parse } from 'path';
+import { dirname, join, parse } from 'path';
+import { fileURLToPath } from 'url';
 import sharp from 'sharp';
 import type { TemplateDeviceType } from '../types/index.js';
 
@@ -22,6 +23,13 @@ export interface RealisticFrameAsset {
 
 export type ScreenMode = 'overlay' | 'underlay';
 
+export interface RealisticFrameCompositeResult {
+  image: Buffer;
+  frameFile: string;
+  width: number;
+  height: number;
+}
+
 interface RealisticFrameCandidate {
   filePath: string;
   fileName: string;
@@ -33,6 +41,7 @@ interface RealisticFrameCandidate {
 
 const TRANSPARENCY_THRESHOLD = 10;
 const DEFAULT_FRAME_ASSETS_DIR = 'device_frames';
+const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DEFAULT_SCREEN_ASPECT: Record<TemplateDeviceType, number> = {
   iPhone: 430 / 932,
   iPad: 3 / 4,
@@ -59,6 +68,11 @@ export async function resolveFrameAssetsDir(explicitDir?: string): Promise<strin
   const defaultDir = join(process.cwd(), DEFAULT_FRAME_ASSETS_DIR);
   if (await isDirectory(defaultDir)) {
     return defaultDir;
+  }
+
+  const bundledDir = join(PACKAGE_ROOT, DEFAULT_FRAME_ASSETS_DIR);
+  if (await isDirectory(bundledDir)) {
+    return bundledDir;
   }
 
   return undefined;
@@ -139,6 +153,50 @@ export async function listRealisticFrameAssetFiles(options: {
   return candidates
     .map((candidate) => candidate.fileName)
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+export async function compositeScreenshotWithRealisticFrame(options: {
+  screenshot: Buffer;
+  frameAsset: RealisticFrameAsset;
+}): Promise<RealisticFrameCompositeResult> {
+  const { screenshot, frameAsset } = options;
+  const { screen, overlayWidth, overlayHeight } = frameAsset;
+  const maskedScreenshot = await resizeAndMaskScreenshot(
+    screenshot,
+    screen.width,
+    screen.height,
+    screen.cornerRadius
+  );
+
+  const backdrop = Buffer.from(createScreenBackdropSVG(overlayWidth, overlayHeight, screen));
+  const base = sharp({
+    create: {
+      width: overlayWidth,
+      height: overlayHeight,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  });
+
+  const layers: sharp.OverlayOptions[] =
+    frameAsset.screenMode === 'underlay'
+      ? [
+          { input: backdrop, left: 0, top: 0 },
+          { input: frameAsset.overlay, left: 0, top: 0 },
+          { input: maskedScreenshot, left: screen.x, top: screen.y },
+        ]
+      : [
+          { input: backdrop, left: 0, top: 0 },
+          { input: maskedScreenshot, left: screen.x, top: screen.y },
+          { input: frameAsset.overlay, left: 0, top: 0 },
+        ];
+
+  return {
+    image: await base.composite(layers).png().toBuffer(),
+    frameFile: frameAsset.sourceFile,
+    width: overlayWidth,
+    height: overlayHeight,
+  };
 }
 
 async function loadFrameCandidates(
@@ -497,6 +555,54 @@ async function readOverlayBuffer(filePath: string): Promise<Buffer> {
   const readPromise = readFile(filePath);
   overlayBufferCache.set(filePath, readPromise);
   return readPromise;
+}
+
+async function resizeAndMaskScreenshot(
+  screenshot: Buffer,
+  width: number,
+  height: number,
+  cornerRadius: number
+): Promise<Buffer> {
+  const resized = await sharp(screenshot)
+    .resize(width, height, {
+      fit: 'contain',
+      position: 'centre',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .png()
+    .toBuffer();
+
+  const mask = Buffer.from(`
+    <svg width="${width}" height="${height}">
+      <rect x="0" y="0" width="${width}" height="${height}" fill="transparent" />
+      <rect x="0" y="0" width="${width}" height="${height}" rx="${cornerRadius}" ry="${cornerRadius}" fill="#ffffff" />
+    </svg>
+  `);
+
+  return sharp(resized)
+    .composite([{ input: mask, blend: 'dest-in' }])
+    .png()
+    .toBuffer();
+}
+
+function createScreenBackdropSVG(
+  frameWidth: number,
+  frameHeight: number,
+  screen: ScreenRect
+): string {
+  return `
+    <svg width="${frameWidth}" height="${frameHeight}">
+      <rect
+        x="${screen.x}"
+        y="${screen.y}"
+        width="${screen.width}"
+        height="${screen.height}"
+        rx="${screen.cornerRadius}"
+        ry="${screen.cornerRadius}"
+        fill="#05070B"
+      />
+    </svg>
+  `;
 }
 
 async function isDirectory(path: string): Promise<boolean> {

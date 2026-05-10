@@ -151,6 +151,7 @@ Standalone backend defaults:
 | `aperture generate-copy`          | Generate localized marketing copy                       |
 | `aperture convert-images <input>` | Batch-convert PNG files to JPG and flatten transparency |
 | `aperture resize-images <input>`  | Batch-resize images to a target size                    |
+| `aperture frame <input>`          | Apply a realistic device frame to existing screenshots  |
 
 ### Image Conversion
 
@@ -175,6 +176,24 @@ aperture resize-images ./shots/screen.png --size 100x100
 # Resize a whole folder into a separate output directory
 aperture resize-images ./shots --size 1290x2796 --output ./shots-resized
 ```
+
+### Device Framing
+
+Use `aperture frame` when you already have screenshots and only need to apply a device frame.
+
+```bash
+# See the bundled frame files
+aperture frame --list-frames
+
+# Frame one image and write screen-framed.png next to it
+aperture frame ./shots/screen.png --device-frame "iPhone 17 Pro.png"
+
+# Frame a whole folder into a separate output directory
+aperture frame ./shots --device-frame "iPhone 17 Pro.png" --output ./shots-framed
+```
+
+By default, Aperture looks for frame PNGs in `device_frames` or `FRAME_ASSETS_DIR`. Use
+`--frame-assets <dir>` to point at a different folder.
 
 ### Export Frame Modes
 
