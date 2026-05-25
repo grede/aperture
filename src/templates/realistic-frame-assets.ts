@@ -95,9 +95,9 @@ export async function resolveRealisticFrameAsset(options: {
   }
 
   if (options.preferredFileName) {
+    const normalizedPreferred = options.preferredFileName.trim().toLowerCase();
     const preferredCandidate = candidates.find(
-      (candidate) =>
-        candidate.fileName.toLowerCase() === options.preferredFileName?.trim().toLowerCase()
+      (candidate) => candidate.fileName.toLowerCase() === normalizedPreferred
     );
     if (preferredCandidate) {
       const overlay = await readOverlayBuffer(preferredCandidate.filePath);
@@ -110,6 +110,16 @@ export async function resolveRealisticFrameAsset(options: {
         sourceFile: preferredCandidate.fileName,
       };
     }
+
+    const fileExistsInAssets = await isReadableFile(join(assetsDir, options.preferredFileName));
+    if (fileExistsInAssets) {
+      throw new Error(
+        `Device frame "${options.preferredFileName}" exists but its screen area could not be detected. ` +
+          `Add a sibling JSON file (e.g. "${parse(options.preferredFileName).name}.json") ` +
+          `with { "screen": { "x", "y", "width", "height", "cornerRadius" }, "screenMode": "overlay" | "underlay" }.`
+      );
+    }
+    return null;
   }
 
   const targetAspect = options.targetScreenAspect ?? DEFAULT_SCREEN_ASPECT[options.deviceType];
@@ -565,9 +575,8 @@ async function resizeAndMaskScreenshot(
 ): Promise<Buffer> {
   const resized = await sharp(screenshot)
     .resize(width, height, {
-      fit: 'contain',
+      fit: 'cover',
       position: 'centre',
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
     .png()
     .toBuffer();
@@ -609,6 +618,15 @@ async function isDirectory(path: string): Promise<boolean> {
   try {
     const pathStats = await stat(path);
     return pathStats.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function isReadableFile(path: string): Promise<boolean> {
+  try {
+    const pathStats = await stat(path);
+    return pathStats.isFile();
   } catch {
     return false;
   }

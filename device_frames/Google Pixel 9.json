@@ -1,0 +1,10 @@
+{
+  "screen": {
+    "x": 80,
+    "y": 80,
+    "width": 1648,
+    "height": 3696,
+    "cornerRadius": 96
+  },
+  "screenMode": "underlay"
+}
